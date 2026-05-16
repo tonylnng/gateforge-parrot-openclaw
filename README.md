@@ -33,7 +33,7 @@ Like a parrot, it faithfully relays your conversations — but only you hold the
 | 🔌 **REST API + JS SDK** | Plug into your CRM, ERP, or any 3rd-party system via scoped API keys. |
 | 💬 **Multi-turn context** | Automatic conversation history + rolling summarization. |
 | 🛡️ **Tamper-evident audit log** | Hash-chained log of every sensitive operation. |
-| 🔄 **Native OpenClaw integration** | Uses `before_prompt_build` + `after_response_generated` hooks. |
+| 🔄 **Native OpenClaw integration** | Uses `llm_input` + `llm_output` plugin hooks. |
 | 🏗️ **Multi-tenant ready** | Each tenant has independent keys and isolation. |
 | 📡 **WebSocket streaming** | First-token latency under 200ms. |
 
@@ -41,27 +41,29 @@ Like a parrot, it faithfully relays your conversations — but only you hold the
 
 ## Quick Start
 
-> ⚠️ **Status: Design phase.** This repo currently contains architecture, security, and user-journey specs plus a working crypto PoC. Implementation begins after design sign-off.
-
-Once released, installation will be:
+> ✅ **Status: Phase 1 MVP shipped.** The plugin builds, installs into OpenClaw, serves a bundled React UI, and ships with JWT auth + Argon2id + AES-256-GCM crypto. Phase 2 (live agent streaming) is next.
 
 ```bash
-# Install the plugin from ClawHub
-openclaw plugins install clawhub:gateforge-parrot-openclaw
+# 1. Clone and build
+git clone https://github.com/tonylnng/gateforge-parrot-openclaw.git
+cd gateforge-parrot-openclaw
+npm install && npm run build:all
 
-# Initialize with a JWT secret and your public URL
-openclaw parrot init \
-  --jwt-secret "$(openssl rand -hex 32)" \
-  --public-base-url "https://chat.example.com"
+# 2. Install into your OpenClaw
+openclaw plugins install ./packages/plugin
 
-# Restart OpenClaw to load the plugin
-openclaw restart
+# 3. Generate a JWT secret
+openssl rand -base64 48
 
-# Invite your first user
-openclaw parrot:user:invite alice@example.com
+# 4. Add a plugins.entries.gateforge-parrot block to ~/.openclaw/openclaw.json
+#    (publicBaseUrl = your OpenClaw gateway URL, jwtSecret from step 3)
+
+# 5. Restart and open the UI
+openclaw gateway restart
+# → open <publicBaseUrl>/parrot/ui
 ```
 
-Then open `https://chat.example.com/parrot/ui` and sign in.
+Full walkthrough with config examples and Tailscale/LAN/public-domain variants is in [`INSTALL.md`](./INSTALL.md).
 
 ---
 
