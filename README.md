@@ -3,8 +3,10 @@
 > Zero-knowledge, end-to-end encrypted chat channel for [OpenClaw](https://openclaw.ai) — a native plugin that turns your OpenClaw Gateway into an embeddable, secure web chat platform.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-phase--1--MVP-green.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-phase--3--shipped-brightgreen.svg)](#project-status)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-plugin-purple.svg)](https://openclaw.ai)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-blue.svg)](./openapi.yaml)
+[![SDK](https://img.shields.io/badge/npm-%40gateforge%2Fparrot--sdk-orange.svg)](./packages/sdk)
 
 ---
 
@@ -30,18 +32,21 @@ Like a parrot, it faithfully relays your conversations — but only you hold the
 | 🔒 **Zero-knowledge E2EE** | AES-256-GCM message encryption. Even DB admins cannot read content. |
 | 🔑 **Browser-side key management** | Argon2id KDF. Master Key never leaves your device. |
 | 🌐 **Embeddable web UI** | Pre-built React SPA served by the plugin at `/gateforge-parrot/ui`. |
-| 🔌 **REST API + JS SDK** | Plug into your CRM, ERP, or any 3rd-party system via scoped API keys. |
-| 💬 **Multi-turn context** | Automatic conversation history + rolling summarization. |
-| 🛡️ **Tamper-evident audit log** | Hash-chained log of every sensitive operation. |
+| 🛠️ **Admin panel** | Built-in `?admin=1` view: manage API keys, webhooks, and verify the audit chain. |
+| 🔌 **REST API + JS SDK** | 29 endpoints + `@gateforge/parrot-sdk` — embed Parrot in any 3rd-party app via scoped API keys. |
+| 📡 **SSE assistant streaming** | Token-by-token responses through `POST /messages/stream` (re-encrypted on the fly). |
+| 💬 **Session management** | List / create / rename / pin / archive / delete / search / export — all titles client-encrypted. |
+| 🪝 **Outbound webhooks** | HMAC-signed event delivery with retries, delivery log, and one-click ping from the admin panel. |
+| 🛡️ **Tamper-evident audit log** | Hash-chained log with built-in `/audit/verify` chain checker. |
+| 🚦 **Rate limiting & idempotency** | Per-key + per-tenant token buckets, `Idempotency-Key` support, standard `X-RateLimit-*` headers. |
 | 🔄 **Native OpenClaw integration** | Uses `llm_input` + `llm_output` plugin hooks. |
 | 🏗️ **Multi-tenant ready** | Each tenant has independent keys and isolation. |
-| 📡 **WebSocket streaming** | First-token latency under 200ms. |
 
 ---
 
 ## Quick Start
 
-> ✅ **Status: Phase 1 MVP shipped.** The plugin builds, installs into OpenClaw, serves a bundled React UI, and ships with JWT auth + Argon2id + AES-256-GCM crypto. Phase 2 (live agent streaming) is next.
+> ✅ **Status: Phases 1 – 3 shipped.** Plugin + bundled React UI + Integration API (29 endpoints, OpenAPI 3.1, SDK, webhooks, SSE streaming, admin panel, audit chain verifier) all in `main`.
 
 ```bash
 # 1. Clone and build
@@ -96,6 +101,9 @@ Read [SECURITY.md](./SECURITY.md) for the full cryptographic design.
 | [USER_JOURNEYS.md](./USER_JOURNEYS.md) | User / admin / auditor personas and end-to-end flows |
 | [PLUGIN_DESIGN.md](./PLUGIN_DESIGN.md) | OpenClaw channel plugin design — manifest, hooks, schema |
 | [INTEGRATION_API.md](./INTEGRATION_API.md) | Phase 2 design — sessions, scoped API keys, JS SDK, webhooks, rate limiting (7 Mermaid diagrams) |
+| [WIRE_FORMAT.md](./WIRE_FORMAT.md) | Wire-format reference for non-JS clients — headers, framing, error envelope, SSE protocol |
+| [openapi.yaml](./openapi.yaml) | OpenAPI 3.1 spec — 29 operations, drift-checked in CI |
+| [CHANGELOG.md](./CHANGELOG.md) | Versioned change history |
 | [poc/](./poc/) | Working TypeScript crypto module demonstrating the E2EE primitives |
 
 All diagrams use **Mermaid** — they render natively on GitHub.
@@ -139,12 +147,11 @@ flowchart LR
 |-------|--------|-------|
 | **0** | ✅ Done | Architecture & security design, crypto PoC |
 | **1** | ✅ Done | Plugin skeleton, manifest, DB migration, JWT auth, bundled React UI |
-| **2** | 🚧 Next | `llm_input` + `llm_output` hooks wired to agent streaming |
-| **3** | ⏳ | Polished UI: streaming responses, model picker, settings |
-| **4** | ⏳ | REST API + API keys for 3rd-party integration |
-| **5** | ⏳ | JS SDK + embeddable widget |
-| **6** | ⏳ | Audit log verification CLI, password recovery via shards |
-| **7** | ⏳ | Publish to ClawHub registry |
+| **2** | ✅ Done | Integration API — sessions, scoped API keys, webhooks, SSE streaming, rate limiting, idempotency, OpenAPI 3.1, SDK |
+| **3** | ✅ Done | Admin panel UI (API keys / Webhooks / Audit), assistant SSE streaming in the bundled UI |
+| **4** | ⏳ Next | Embeddable widget (`<script>` drop-in) + iframe host SDK |
+| **5** | ⏳ | Audit log verification CLI + password recovery via Shamir shards |
+| **6** | ⏳ | Publish to ClawHub registry + npm release of `@gateforge/parrot-sdk` |
 
 See [PLUGIN_DESIGN.md](./PLUGIN_DESIGN.md#revised-implementation-phases) for full phase breakdown.
 
@@ -152,14 +159,59 @@ See [PLUGIN_DESIGN.md](./PLUGIN_DESIGN.md#revised-implementation-phases) for ful
 
 ## Project Status
 
-🚀 **Phase 1 MVP shipped** — install instructions in [`INSTALL.md`](./INSTALL.md).
+🚀 **Phases 1 – 3 shipped** — production-ready integration surface in `main`. Install instructions in [`INSTALL.md`](./INSTALL.md).
 
-The `packages/plugin` workspace builds and publishes the plugin. The `packages/ui` workspace builds the React UI, which is bundled into `packages/plugin/ui-dist/` and served at `/gateforge-parrot/ui` when the plugin loads.
+The monorepo ships three workspaces:
+
+- `@gateforge/parrot-openclaw` (`packages/plugin`) — the OpenClaw channel plugin, builds to `dist/` and bundles the UI into `ui-dist/`.
+- `@gateforge/parrot-ui` (`packages/ui`) — React 18 + Vite frontend, served at `/gateforge-parrot/ui` with `?admin=1` for the admin panel.
+- `@gateforge/parrot-sdk` (`packages/sdk`) — typed REST + WebCrypto SDK for 3rd-party integrators.
+
+### Shipped surface
+
+```mermaid
+flowchart LR
+    subgraph Browser["Browser"]
+        UI["Chat UI"]
+        Admin["Admin Panel<br/>(?admin=1)"]
+        SDK["@gateforge/parrot-sdk"]
+    end
+
+    subgraph Plugin["GateForge Parrot plugin"]
+        REST["REST API<br/>29 endpoints"]
+        SSE["SSE streaming"]
+        WH["Webhook dispatcher"]
+        AUD["Audit chain"]
+        RL["Rate limiter"]
+    end
+
+    subgraph OpenClaw["OpenClaw core"]
+        Agent["Agent + LLM"]
+    end
+
+    UI -->|JWT, ciphertext| REST
+    Admin -->|JWT| REST
+    SDK -->|API key + Idempotency-Key| REST
+    REST --> SSE
+    REST --> WH
+    REST --> AUD
+    REST --> RL
+    SSE -->|in-memory plaintext| Agent
+    WH -->|HMAC-signed| ThirdParty["3rd-party<br/>HTTPS endpoint"]
+
+    style UI fill:#064e3b,color:#fff
+    style Admin fill:#0f172a,color:#fff,stroke:#f59e0b
+    style SDK fill:#1e1b4b,color:#fff
+    style REST fill:#1e293b,color:#fff,stroke:#06b6d4
+    style Agent fill:#451a03,color:#fff
+```
+
+### Build everything
 
 ```bash
-# Build everything
 npm install
-npm run build:all
+npm run build:all       # ui (vite) + plugin (tsc) + sdk (tsc)
+npm run check:openapi   # drift check — spec must match router
 ```
 
 If you have feedback or hit issues, please [open an issue](https://github.com/tonylnng/gateforge-parrot-openclaw/issues).

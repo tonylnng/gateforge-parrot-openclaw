@@ -1,7 +1,8 @@
-# GateForge Parrot — Integration API & Session Management Design
+# GateForge Parrot — Integration API & Session Management
 
-> **Status:** Design draft for review. No code written until this document is approved.
-> **Phase:** 2 (covers 2a–2g + chat session management)
+> **Status:** ✅ **Delivered** — Phase 2 + Phase 3 closeout merged to `main` (commits `b00f48d`, `470dc29`, `19cccdf`, `41ca240`, `85a5caf`, `bae6b13`).
+> **Phase:** 2 (2a–2g + sessions) and 3 (admin UI + SSE streaming in the bundled chat UI).
+> **Spec parity:** 29 / 29 operations in sync between `openapi.yaml` and `router.ts` (drift CI).
 > **Last updated:** May 16, 2026
 
 ---
@@ -798,23 +799,51 @@ None blocking — but flagging for awareness:
 
 ## 17. Implementation Phase Plan
 
-| Phase | Scope | Estimated effort |
-|---|---|---|
-| **2-rename** | Global rename `parrot` → `gateforge-parrot` (paths, tables, env vars, code identifiers, docs) | 0.5d |
-| **2-sessions** | Sessions schema + REST + SDK + bundled UI (list, create, rename, pin, archive, delete, export, search) | 2d |
-| **2a** | API key CRUD + Bearer auth + scoped routes + idempotency middleware | 1d |
-| **2b** | SSE streaming wired to `llm_input` / `llm_output` hooks | 0.5d |
-| **2c** | `@gateforge/parrot-sdk` package (REST + WebCrypto) + npm publish | 1d |
-| **2e** | Webhooks: subscribe + HMAC sign + dispatch + retry + delivery log | 0.5d |
-| **2f** | Rate limiter (token-bucket, per-key + per-tenant) | 0.5d |
-| **2g** | Static `openapi.yaml` + `WIRE_FORMAT.md` + drift CI check | 0.5d |
+| Phase | Scope | Status | Commit |
+|---|---|---|---|
+| **2-rename** | Global rename `parrot` → `gateforge-parrot` (paths, tables, env vars, code identifiers, docs) | ✅ Shipped | `e86830e` |
+| **2-sessions** | Sessions schema + REST + SDK + bundled UI (list, create, rename, pin, archive, delete, export, search) | ✅ Shipped | `b00f48d`, `41ca240` |
+| **2a** | API key CRUD + Bearer auth + scoped routes + idempotency middleware | ✅ Shipped | `b00f48d` |
+| **2b** | SSE streaming wired to `llm_input` / `llm_output` hooks | ✅ Shipped | `b00f48d` |
+| **2c** | `@gateforge/parrot-sdk` package (REST + WebCrypto) | ✅ Shipped | `470dc29` |
+| **2e** | Webhooks: subscribe + HMAC sign + dispatch + retry + delivery log | ✅ Shipped | `b00f48d` |
+| **2f** | Rate limiter (token-bucket, per-key + per-tenant) | ✅ Shipped | `b00f48d` |
+| **2g** | Static `openapi.yaml` + `WIRE_FORMAT.md` + drift CI check | ✅ Shipped | `19cccdf` |
+| **2-closeout** | `GET /conversations/:id`, `GET /conversations/:id/export`, `PATCH /apikeys/:id`, `GET /webhooks/:id/deliveries`, `GET /agents`, `GET /agents/:id`, `GET /audit`, `GET /audit/verify`, `X-Request-Id` + `X-RateLimit-*` headers, cursor pagination | ✅ Shipped | `85a5caf` |
+| **3** | Admin panel UI (API keys / Webhooks / Audit) + assistant SSE streaming in the bundled chat UI | ✅ Shipped | `bae6b13` |
 
-Total: ~6.5 dev-days for a single engineer.
+### Delivery flow (actual)
+
+```mermaid
+gantt
+    title GateForge Parrot — Delivery timeline (May 16, 2026)
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b %d
+
+    section Design
+    Architecture + SECURITY + USER_JOURNEYS    :done, d1, 2026-05-16, 1d
+    Phase 2 design (INTEGRATION_API.md)        :done, d2, 2026-05-16, 1d
+
+    section Phase 1
+    Plugin skeleton + bundled UI               :done, p1, 2026-05-16, 1d
+
+    section Phase 2
+    Sessions + API keys + webhooks + SSE       :done, p2a, 2026-05-16, 1d
+    SDK package                                 :done, p2c, 2026-05-16, 1d
+    OpenAPI + WIRE_FORMAT + drift CI           :done, p2g, 2026-05-16, 1d
+    Sessions sidebar UI                        :done, p2u, 2026-05-16, 1d
+    Closeout (8 endpoints + headers)           :done, p2z, 2026-05-16, 1d
+
+    section Phase 3
+    Admin panel + SSE streaming UI             :done, p3, 2026-05-16, 1d
+```
 
 ---
 
 ## 18. Sign-off
 
-Once this document is approved, the implementation phases execute in the order listed above, with one commit per phase. No commits until sign-off.
+✅ **Signed off and shipped.** All phases above were delivered to `main` on May 16, 2026.
 
-— End of design document —
+Next design milestone: **Phase 4** — embeddable widget (`<script>` drop-in + iframe host SDK + postMessage bridge keeping the Master Key in the parent origin). Tracked separately.
+
+— End of document —

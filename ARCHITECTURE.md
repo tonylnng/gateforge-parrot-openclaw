@@ -457,15 +457,76 @@ gateforge-parrot-openclaw/
 
 ---
 
-## Implementation Phases
+## Implementation Phases — Current State
 
-| Phase | Scope |
-|-------|-------|
-| **Phase 1 — MVP** | Single tenant, JWT login, basic chat + persistence |
-| **Phase 2 — Context** | Context window management + automatic summarization |
-| **Phase 3 — API** | API keys + REST API for external systems |
-| **Phase 4 — Embed** | JS SDK + embed widget + webhook |
-| **Phase 5 — Scale** | Multi-tenant, vector search, monitoring |
+| Phase | Scope | Status |
+|-------|-------|--------|
+| **Phase 0 — Design** | Architecture + SECURITY + USER_JOURNEYS + crypto PoC | ✅ Shipped |
+| **Phase 1 — MVP** | Plugin skeleton, manifest, DB migration, JWT auth, bundled React UI | ✅ Shipped |
+| **Phase 2 — Integration API** | Sessions + scoped API keys + webhooks + SSE streaming + rate limiting + idempotency + OpenAPI 3.1 + SDK + 29 endpoints, drift-checked | ✅ Shipped |
+| **Phase 3 — Admin UI** | Three-tab admin panel (`?admin=1`) + assistant SSE streaming in the chat UI + audit chain verifier | ✅ Shipped |
+| **Phase 4 — Embed** | `<script>` drop-in widget + iframe host SDK + postMessage bridge | ⏳ Next |
+| **Phase 5 — Tooling** | Audit log verification CLI + password recovery via Shamir shards | ⏳ Planned |
+| **Phase 6 — Distribution** | Publish to ClawHub registry + npm release of `@gateforge/parrot-sdk` | ⏳ Planned |
+
+### Phase 3 — Admin panel state machine
+
+The admin panel lives at `/gateforge-parrot/ui?admin=1` and shares the chat UI's JWT session. Tab state is local; one-time secrets (API key plaintext, webhook HMAC seed) are revealed exactly once in a banner and never persisted.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Chat
+    Chat --> Admin: ?admin=1
+    Admin --> Chat: ?admin=0 / back
+
+    state Admin {
+        [*] --> ApiKeys
+        ApiKeys --> ApiKeys_Issue: New key
+        ApiKeys_Issue --> ApiKeys_Reveal: 201 (plaintext token)
+        ApiKeys_Reveal --> ApiKeys: dismiss banner
+        ApiKeys --> ApiKeys_Edit: Edit row
+        ApiKeys_Edit --> ApiKeys: save / cancel
+        ApiKeys --> Webhooks: tab
+        Webhooks --> Webhooks_Create: New webhook
+        Webhooks_Create --> Webhooks_Reveal: 201 (HMAC secret)
+        Webhooks_Reveal --> Webhooks: dismiss banner
+        Webhooks --> Webhooks_Deliveries: expand row
+        Webhooks_Deliveries --> Webhooks: collapse
+        Webhooks --> Audit: tab
+        Audit --> Audit_Verify: Verify chain
+        Audit_Verify --> Audit: ok | break (banner)
+    }
+```
+
+### Phase 3 — SSE streaming sequence
+
+The bundled chat UI now streams assistant tokens through `POST /conversations/:id/messages/stream`. Plaintext exists only in OpenClaw's process for the lifetime of the request — every frame is re-encrypted with the conversation key before it hits the wire.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Chat UI<br/>(Browser)
+    participant API as Parrot REST<br/>(POST /messages/stream)
+    participant Hook as llm_input / llm_output<br/>(Plugin hooks)
+    participant Agent as OpenClaw Agent
+
+    User->>UI: type message
+    UI->>UI: AES-256-GCM encrypt w/ Conv Key
+    UI->>API: POST /messages/stream<br/>(ciphertext + Idempotency-Key)
+    API->>Hook: llm_input(plaintext, in-memory)
+    Hook->>Agent: prompt + history
+    loop per token
+        Agent-->>Hook: token (plaintext)
+        Hook-->>API: emit chunk
+        API-->>UI: event: chunk<br/>data: { ciphertext }
+        UI->>UI: decrypt + append to bubble
+    end
+    Agent-->>Hook: end of stream
+    Hook-->>API: persist final ciphertext
+    API-->>UI: event: done<br/>data: { messageId }
+    UI->>UI: rename placeholder bubble<br/>id = messageId
+```
 
 ---
 
