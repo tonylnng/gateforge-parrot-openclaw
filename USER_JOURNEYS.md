@@ -21,24 +21,24 @@ User journey maps for the three primary personas. Each journey shows screens, ac
 ```mermaid
 journey
     title Maya's first week with OpenClaw Chat
-    section Day 0: Onboarding
+    section Day 0 — Onboarding
       Receive invite email: 4: Maya
       Set password + recovery phrase: 3: Maya
       See zero-knowledge warning: 2: Maya
       First successful login: 5: Maya
-    section Day 1: First chat
+    section Day 1 — First chat
       Create new conversation: 5: Maya
       Send first message: 5: Maya
       See assistant streaming reply: 5: Maya
       Notice "encrypted" indicator: 4: Maya
-    section Day 3: Multi-turn task
+    section Day 3 — Multi-turn task
       Continue old conversation: 5: Maya
       Reference earlier context: 5: Maya
       AI remembers correctly: 5: Maya
-    section Day 5: Search
+    section Day 5 — Search
       Search across conversations: 3: Maya
       Find old message (client-side): 4: Maya
-    section Day 7: Recovery test
+    section Day 7 — Recovery test
       Test recovery passphrase: 2: Maya
       Confirm access restored: 5: Maya
 ```
