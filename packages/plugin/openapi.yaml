@@ -1,0 +1,675 @@
+openapi: 3.1.0
+info:
+  title: GateForge Parrot API
+  version: 0.1.0
+  description: |
+    Zero-knowledge end-to-end encrypted chat API for OpenClaw.
+
+    All message and title bodies are **ciphertext** (base64 of `iv ‖ ct ‖ tag`
+    produced by AES-256-GCM) using a per-conversation key that is itself wrapped
+    with the user's master key. The server cannot decrypt anything.
+
+    See `WIRE_FORMAT.md` in this repository for the full byte-level contract.
+  license:
+    name: MIT
+
+servers:
+  - url: "{publicBaseUrl}/gateforge-parrot/api/v1"
+    variables:
+      publicBaseUrl:
+        default: "https://gw.example.com"
+        description: Public origin of the OpenClaw gateway hosting the plugin.
+
+security:
+  - bearerJwt: []
+  - bearerApiKey: []
+
+tags:
+  - name: Auth
+  - name: Sessions
+  - name: Messages
+  - name: API Keys
+  - name: Webhooks
+  - name: System
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Create a new user account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Exchange email+password for a JWT pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate refresh token, return new access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke a refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+
+  /auth/whoami:
+    get:
+      tags: [Auth]
+      summary: Return authenticated principal info
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Whoami"
+
+  /conversations:
+    get:
+      tags: [Sessions]
+      summary: List sessions for the current user
+      parameters:
+        - in: query
+          name: filter
+          required: false
+          schema:
+            type: string
+            enum: [active, pinned, archived, all]
+            default: active
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [conversations]
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Session"
+    post:
+      tags: [Sessions]
+      summary: Create a session
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation:
+                    $ref: "#/components/schemas/Session"
+
+  /conversations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    patch:
+      tags: [Sessions]
+      summary: Rename / pin / archive
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchSessionRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Sessions]
+      summary: Crypto-shred a session (irreversible)
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /conversations/{id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    get:
+      tags: [Messages]
+      summary: List messages (ciphertext)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Message"
+    post:
+      tags: [Messages]
+      summary: Append a ciphertext message
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    $ref: "#/components/schemas/Message"
+
+  /conversations/{id}/messages/stream:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    post:
+      tags: [Messages]
+      summary: Append a ciphertext user message and stream ciphertext deltas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  Frame layout:
+
+                  ```
+                  event: chunk
+                  data: {"delta":"<base64 ciphertext>"}
+
+                  event: done
+                  data: {"messageId":"<uuid>","createdAt":<ms>}
+                  ```
+
+  /apikeys:
+    get:
+      tags: [API Keys]
+      summary: List API keys for the user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKeys:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKey"
+    post:
+      tags: [API Keys]
+      summary: Issue an API key (plaintext returned once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueApiKeyRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKey:
+                    $ref: "#/components/schemas/IssuedApiKey"
+
+  /apikeys/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [API Keys]
+      summary: Revoke an API key
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhook subscriptions
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Webhook"
+    post:
+      tags: [Webhooks]
+      summary: Subscribe to webhook events (secret returned once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWebhookRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhook:
+                    $ref: "#/components/schemas/CreatedWebhook"
+
+  /webhooks/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [Webhooks]
+      summary: Update events / url / enabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchWebhookRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+    delete:
+      tags: [Webhooks]
+      summary: Remove subscription
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+
+  /webhooks/{id}/test:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Webhooks]
+      summary: Send a `webhook.ping` event
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  queued: { type: boolean }
+
+components:
+  securitySchemes:
+    bearerJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    bearerApiKey:
+      type: http
+      scheme: bearer
+      description: API key in format `pk_<env>_<random>.<secret>`
+
+  parameters:
+    ConversationId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema: { type: string, maxLength: 200 }
+      description: Replay protection; same key returns the original response for 24h.
+
+  responses:
+    Ok:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok: { type: boolean }
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Operation denied (registration closed, scope missing, etc.)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found or owned by another principal
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, plugin, version]
+      properties:
+        status: { type: string, enum: [ok] }
+        plugin: { type: string, enum: [gateforge-parrot] }
+        version: { type: string }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+
+    SignupRequest:
+      type: object
+      required: [email, password, kdfSalt, kdfMemoryCostKiB, kdfTimeCost, kdfParallelism, wrappedMasterKey]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 12 }
+        kdfSalt: { type: string, description: "base64 Argon2 salt" }
+        kdfMemoryCostKiB: { type: integer }
+        kdfTimeCost: { type: integer }
+        kdfParallelism: { type: integer }
+        wrappedMasterKey: { type: string, description: "base64 AES-KW(MK, KEK)" }
+        tenantId: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+        tenantId: { type: string }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id: { type: string }
+            email: { type: string }
+            tenantId: { type: string }
+        kdf:
+          type: object
+          properties:
+            salt: { type: string }
+            memoryCostKiB: { type: integer }
+            timeCost: { type: integer }
+            parallelism: { type: integer }
+        wrappedMasterKey: { type: string }
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        accessTokenExp: { type: integer }
+        refreshTokenExp: { type: integer }
+
+    Whoami:
+      type: object
+      properties:
+        userId: { type: string }
+        tenantId: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+
+    Session:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, nullable: true }
+        encryptedTitle: { type: string, nullable: true, description: "base64 AES-256-GCM(title, convKey)" }
+        wrappedConversationKey: { type: string }
+        agentId: { type: string, nullable: true }
+        isPinned: { type: boolean }
+        isArchived: { type: boolean }
+        pinnedAt: { type: integer, nullable: true }
+        archivedAt: { type: integer, nullable: true }
+        lastMessageAt: { type: integer, nullable: true }
+        messageCount: { type: integer }
+        createdAt: { type: integer }
+        updatedAt: { type: integer }
+
+    CreateSessionRequest:
+      type: object
+      required: [wrappedConversationKey]
+      properties:
+        wrappedConversationKey: { type: string }
+        encryptedTitle: { type: string }
+        title: { type: string }
+        agentId: { type: string }
+
+    PatchSessionRequest:
+      type: object
+      properties:
+        encryptedTitle: { type: string }
+        title: { type: string }
+        isPinned: { type: boolean }
+        isArchived: { type: boolean }
+        agentId: { type: string, nullable: true }
+
+    Message:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        role: { type: string, enum: [user, assistant, system, tool] }
+        ciphertext: { type: string }
+        meta: { type: string, nullable: true, description: "Non-sensitive JSON metadata only" }
+        createdAt: { type: integer }
+
+    SendMessageRequest:
+      type: object
+      required: [ciphertext]
+      properties:
+        role: { type: string, enum: [user, assistant, system, tool] }
+        ciphertext: { type: string }
+        meta: { type: object, additionalProperties: true }
+        streamTag: { type: string, description: "Optional opaque tag (stream endpoint only)" }
+
+    ApiKey:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+        createdAt: { type: integer }
+        lastUsedAt: { type: integer, nullable: true }
+        revokedAt: { type: integer, nullable: true }
+
+    IssuedApiKey:
+      allOf:
+        - $ref: "#/components/schemas/ApiKey"
+        - type: object
+          properties:
+            token: { type: string, description: "Plaintext key — shown ONCE." }
+            keyPrefix: { type: string }
+
+    IssueApiKeyRequest:
+      type: object
+      required: [label, scopes, wrappedMasterKey]
+      properties:
+        label: { type: string }
+        scopes:
+          type: array
+          items:
+            type: string
+            enum:
+              - conversations:read
+              - conversations:write
+              - conversations:delete
+              - messages:read
+              - messages:send
+              - messages:stream
+              - apikeys:manage
+              - webhooks:manage
+              - audit:read
+              - agents:read
+        wrappedMasterKey: { type: string }
+        env: { type: string, enum: [live, test] }
+
+    Webhook:
+      type: object
+      properties:
+        id: { type: string }
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean }
+        createdAt: { type: integer }
+        disabledAt: { type: integer, nullable: true }
+        lastDeliveryAt: { type: integer, nullable: true }
+        consecutiveFailures: { type: integer }
+
+    CreatedWebhook:
+      allOf:
+        - $ref: "#/components/schemas/Webhook"
+        - type: object
+          properties:
+            secret: { type: string, description: "Signing secret — shown ONCE." }
+
+    CreateWebhookRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string }
+
+    PatchWebhookRequest:
+      type: object
+      properties:
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean }
