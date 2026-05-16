@@ -3,7 +3,7 @@
  * surfaces typed errors. The UI is served from the same origin as the API
  * when in production, so we use relative URLs.
  */
-const API_BASE = "/parrot/api/v1";
+const API_BASE = "/gateforge-parrot/api/v1";
 
 export class ApiError extends Error {
   constructor(

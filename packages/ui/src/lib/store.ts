@@ -81,7 +81,7 @@ export const useStore = create<Store>()(
       isUnlocked: () => Boolean(get().masterKey),
     }),
     {
-      name: "parrot.session",
+      name: "gateforge-parrot.session",
       partialize: (s) => ({
         accessToken: s.accessToken,
         refreshToken: s.refreshToken,

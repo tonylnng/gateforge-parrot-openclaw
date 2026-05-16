@@ -36,7 +36,7 @@ function secretBytes(cfg: ParrotConfig): Uint8Array {
 }
 
 const ISSUER = "gateforge-parrot";
-const AUDIENCE = "parrot-api";
+const AUDIENCE = "gateforge-parrot-api";
 
 export async function issueTokenPair(
   cfg: ParrotConfig,

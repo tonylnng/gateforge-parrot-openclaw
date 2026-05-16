@@ -2,7 +2,7 @@
  * Drizzle schema for GateForge Parrot.
  *
  * All tables are prefixed with the configured `database.schemaPrefix`
- * (default `parrot_`) to coexist with OpenClaw's own tables in the same DB.
+ * (default `gateforge_parrot_`) to coexist with OpenClaw's own tables in the same DB.
  *
  * Both PostgreSQL and SQLite drivers expose the same logical columns. Where
  * column types differ we pick a portable representation: timestamps are stored

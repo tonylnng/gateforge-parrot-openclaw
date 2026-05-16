@@ -7,12 +7,12 @@ type Level = (typeof LEVELS)[number];
 const levelRank: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 
 function envLevel(): Level {
-  const raw = (process.env.PARROT_LOG_LEVEL ?? "info").toLowerCase();
+  const raw = (process.env.GATEFORGE_PARROT_LOG_LEVEL ?? "info").toLowerCase();
   return (LEVELS as readonly string[]).includes(raw) ? (raw as Level) : "info";
 }
 
 /**
- * Wrap an optional host logger so messages are prefixed with `[parrot]`.
+ * Wrap an optional host logger so messages are prefixed with `[gateforge-parrot]`.
  * If no host logger is provided, falls back to console.
  */
 export function makeLogger(host?: ParrotLogger): ParrotLogger {
@@ -20,7 +20,7 @@ export function makeLogger(host?: ParrotLogger): ParrotLogger {
 
   function emit(level: Level, msg: string, meta?: Record<string, unknown>): void {
     if (levelRank[level] < min) return;
-    const prefixed = `[parrot] ${msg}`;
+    const prefixed = `[gateforge-parrot] ${msg}`;
     if (host) {
       host[level](prefixed, meta);
       return;

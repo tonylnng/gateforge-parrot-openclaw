@@ -29,8 +29,8 @@ flowchart TB
     end
 
     subgraph Plugin["gateforge-parrot-openclaw (in-process)"]
-        HttpRoute["HTTP Routes<br/>/parrot/api/*"]
-        WsRoute["WebSocket Route<br/>/parrot/ws"]
+        HttpRoute["HTTP Routes<br/>/gateforge-parrot/api/*"]
+        WsRoute["WebSocket Route<br/>/gateforge-parrot/ws"]
         Channel["ChannelPlugin<br/>(outbound + inbound)"]
         Hooks["Hooks<br/>before_prompt_build<br/>after_response_generated"]
         DB[("Plugin-owned tables<br/>(via Drizzle migration)")]
@@ -85,7 +85,7 @@ sequenceDiagram
 
     User->>FE: Type message
     FE->>FE: Encrypt with CK (AES-GCM)
-    FE->>Plugin: POST /parrot/api/messages<br/>(ciphertext + jwt)
+    FE->>Plugin: POST /gateforge-parrot/api/messages<br/>(ciphertext + jwt)
     Plugin->>Plugin: Store ciphertext in plugin DB
     Plugin->>FE: WS: "send plaintext for inference"
     FE->>Plugin: WS plaintext (transient)
@@ -139,7 +139,7 @@ gateforge-parrot-openclaw/
 │   │   ├── conversation.service.ts # CRUD with ciphertext-only contract
 │   │   └── audit.service.ts        # hash-chained audit log
 │   └── frontend/                   # static SPA built and served by plugin
-│       └── dist/                   # compiled output served at /parrot/ui
+│       └── dist/                   # compiled output served at /gateforge-parrot/ui
 └── tests/
     ├── crypto.test.ts
     ├── hooks.test.ts
@@ -164,7 +164,7 @@ gateforge-parrot-openclaw/
     }
   },
   "channelEnvVars": {
-    "parrot": ["PARROT_JWT_SECRET", "PARROT_DB_URL"]
+    "parrot": ["GATEFORGE_PARROT_JWT_SECRET", "PARROT_DB_URL"]
   },
   "activation": {
     "channels": ["parrot"],
@@ -589,7 +589,7 @@ export const apiKeys = pgTable("parrot_api_keys", {
 });
 ```
 
-All tables are namespaced with `parrot_` to coexist with OpenClaw core tables.
+All tables are namespaced with `gateforge_parrot_` to coexist with OpenClaw core tables.
 
 ---
 
@@ -610,7 +610,7 @@ sequenceDiagram
     OC->>OC: validate configSchema
     Admin->>CLI: openclaw parrot init --jwt-secret $(openssl rand -hex 32) --public-base-url https://chat.example.com
     CLI->>OC: write config patch
-    OC->>DB: run plugin migrations (creates parrot_* tables)
+    OC->>DB: run plugin migrations (creates gateforge_parrot_* tables)
     Admin->>CLI: openclaw restart
     OC->>OC: load plugin, register routes/hooks
     OC-->>Admin: "Parrot ready at https://chat.example.com"
@@ -650,7 +650,7 @@ The plugin model **strengthens** security in one way: the OpenClaw token never h
 
 You can also build it as a plugin **plus** publish the SPA as a separately deployable static bundle. Then:
 
-- Self-hosters install the plugin → instant working chat at `https://their-host/parrot/ui`
+- Self-hosters install the plugin → instant working chat at `https://their-host/gateforge-parrot/ui`
 - Or they deploy the SPA elsewhere (CDN, S3, pplx.app) and point it at the plugin's API
 
 This is the most flexible deployment model.
@@ -663,7 +663,7 @@ This is the most flexible deployment model.
 |-------|-------|
 | **Phase 1** | Plugin skeleton, manifest, DB migration, JWT auth, basic encrypted message store |
 | **Phase 2** | Hook integration with core agent runtime; encrypted context build + response persist |
-| **Phase 3** | SPA frontend built and served by plugin at `/parrot/ui` |
+| **Phase 3** | SPA frontend built and served by plugin at `/gateforge-parrot/ui` |
 | **Phase 4** | API keys + REST API for 3rd-party systems |
 | **Phase 5** | JS SDK + embeddable widget |
 | **Phase 6** | Multi-tenant + audit log hash chain verification CLI |

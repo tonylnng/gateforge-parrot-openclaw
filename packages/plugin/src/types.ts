@@ -7,7 +7,7 @@
 /** Plugin id as registered with OpenClaw. */
 export const PLUGIN_ID = "gateforge-parrot" as const;
 /** Channel id this plugin exposes to OpenClaw routing. */
-export const CHANNEL_ID = "parrot" as const;
+export const CHANNEL_ID = "gateforge-parrot" as const;
 
 /**
  * Resolved plugin configuration (after defaults are applied to the raw config

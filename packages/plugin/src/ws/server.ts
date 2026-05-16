@@ -2,7 +2,7 @@
  * WebSocket server for low-latency message streaming.
  *
  * Connection lifecycle:
- *   1. Client opens `ws://.../parrot/ws?token=<access-jwt>&conversation=<id>`
+ *   1. Client opens `ws://.../gateforge-parrot/ws?token=<access-jwt>&conversation=<id>`
  *   2. Server verifies JWT, loads conversation ownership
  *   3. Client sends `{type:"append", role, ciphertext, meta?}` frames
  *   4. Server fans out `{type:"chunk", ciphertext}` frames from the agent

@@ -38,7 +38,7 @@ export function makeStaticHandler(basePath: string, logger: ParrotLogger): (req:
   const root = uiRoot();
   const hasBundle = existsSync(root) && existsSync(path.join(root, "index.html"));
   if (!hasBundle) {
-    logger.warn(`UI bundle not found at ${root}. /parrot/ui will serve a stub. Run 'npm run build:ui' in the source repo.`);
+    logger.warn(`UI bundle not found at ${root}. /gateforge-parrot/ui will serve a stub. Run 'npm run build:ui' in the source repo.`);
   }
   const indexHtml = hasBundle ? readFileSync(path.join(root, "index.html"), "utf8") : stubIndex();
   const normBase = basePath.replace(/\/+$/, "");
@@ -88,7 +88,7 @@ h1{font-size:28px;margin-bottom:8px}h1::before{content:"🦜 "}code{background:#
 </head><body>
 <h1>GateForge Parrot</h1>
 <p>The plugin is running, but the bundled UI was not built.</p>
-<div class="note">Run <code>npm run build:ui</code> in the source repo, or visit the API at <code>/parrot/api/v1/health</code>.</div>
+<div class="note">Run <code>npm run build:ui</code> in the source repo, or visit the API at <code>/gateforge-parrot/api/v1/health</code>.</div>
 <p>Docs: <a href="https://github.com/tonylnng/gateforge-parrot-openclaw">github.com/tonylnng/gateforge-parrot-openclaw</a></p>
 </body></html>`;
 }

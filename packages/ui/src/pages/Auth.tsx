@@ -128,7 +128,7 @@ export function Auth() {
     <div className="auth-shell">
       <form className="auth-card" onSubmit={submit}>
         <h2>
-          <span className="parrot-logo" aria-hidden>🦜</span> GateForge Parrot
+          <span className="gf-parrot-logo" aria-hidden>🦜</span> GateForge Parrot
         </h2>
 
         {error ? <div className="auth-error">{error}</div> : null}

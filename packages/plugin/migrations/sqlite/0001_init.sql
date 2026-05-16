@@ -1,5 +1,5 @@
 -- GateForge Parrot — initial schema (SQLite)
--- {{prefix}} is replaced with the configured schemaPrefix (default: parrot_)
+-- {{prefix}} is replaced with the configured schemaPrefix (default: gateforge_parrot_)
 
 CREATE TABLE IF NOT EXISTS {{prefix}}tenants (
   id            TEXT PRIMARY KEY,

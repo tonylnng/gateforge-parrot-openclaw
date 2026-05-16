@@ -4,7 +4,7 @@
  * resolved table-name prefix.
  *
  * If `database.driver === "auto"`, we try to inherit OpenClaw's driver from
- * its runtime config; otherwise default to SQLite at `./parrot.db`.
+ * its runtime config; otherwise default to SQLite at `./gateforge-parrot.db`.
  */
 import path from "node:path";
 import { drizzle as drizzleSqlite, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
@@ -61,7 +61,7 @@ export async function openDatabase(
   }
 
   if (driver === "postgres") {
-    const url = cfg.database.url ?? process.env.DATABASE_URL ?? process.env.PARROT_DATABASE_URL;
+    const url = cfg.database.url ?? process.env.DATABASE_URL ?? process.env.GATEFORGE_PARROT_DATABASE_URL;
     if (!url) throw new Error("postgres driver selected but no database.url or DATABASE_URL provided");
     const pool = new Pool({ connectionString: url, max: 10 });
     const schema = buildPostgresSchema(cfg.database.schemaPrefix);
@@ -84,7 +84,7 @@ export async function openDatabase(
   }
 
   // SQLite branch
-  const url = cfg.database.url ?? process.env.PARROT_SQLITE_PATH ?? "file:./parrot.db";
+  const url = cfg.database.url ?? process.env.GATEFORGE_PARROT_SQLITE_PATH ?? "file:./gateforge-parrot.db";
   const filePath = url.startsWith("file:") ? url.slice("file:".length) : url;
   const resolved = path.resolve(filePath);
   const sqlite = new Database(resolved);

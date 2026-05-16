@@ -29,7 +29,7 @@ Like a parrot, it faithfully relays your conversations — but only you hold the
 |---------|-------------|
 | 🔒 **Zero-knowledge E2EE** | AES-256-GCM message encryption. Even DB admins cannot read content. |
 | 🔑 **Browser-side key management** | Argon2id KDF. Master Key never leaves your device. |
-| 🌐 **Embeddable web UI** | Pre-built React SPA served by the plugin at `/parrot/ui`. |
+| 🌐 **Embeddable web UI** | Pre-built React SPA served by the plugin at `/gateforge-parrot/ui`. |
 | 🔌 **REST API + JS SDK** | Plug into your CRM, ERP, or any 3rd-party system via scoped API keys. |
 | 💬 **Multi-turn context** | Automatic conversation history + rolling summarization. |
 | 🛡️ **Tamper-evident audit log** | Hash-chained log of every sensitive operation. |
@@ -60,7 +60,7 @@ openssl rand -base64 48
 
 # 5. Restart and open the UI
 openclaw gateway restart
-# → open <publicBaseUrl>/parrot/ui
+# → open <publicBaseUrl>/gateforge-parrot/ui
 ```
 
 Full walkthrough with config examples and Tailscale/LAN/public-domain variants is in [`INSTALL.md`](./INSTALL.md).
@@ -95,6 +95,7 @@ Read [SECURITY.md](./SECURITY.md) for the full cryptographic design.
 | [SECURITY.md](./SECURITY.md) | E2EE design, key hierarchy, threat model, compliance mapping |
 | [USER_JOURNEYS.md](./USER_JOURNEYS.md) | User / admin / auditor personas and end-to-end flows |
 | [PLUGIN_DESIGN.md](./PLUGIN_DESIGN.md) | OpenClaw channel plugin design — manifest, hooks, schema |
+| [INTEGRATION_API.md](./INTEGRATION_API.md) | Phase 2 design — sessions, scoped API keys, JS SDK, webhooks, rate limiting (7 Mermaid diagrams) |
 | [poc/](./poc/) | Working TypeScript crypto module demonstrating the E2EE primitives |
 
 All diagrams use **Mermaid** — they render natively on GitHub.
@@ -153,7 +154,7 @@ See [PLUGIN_DESIGN.md](./PLUGIN_DESIGN.md#revised-implementation-phases) for ful
 
 🚀 **Phase 1 MVP shipped** — install instructions in [`INSTALL.md`](./INSTALL.md).
 
-The `packages/plugin` workspace builds and publishes the plugin. The `packages/ui` workspace builds the React UI, which is bundled into `packages/plugin/ui-dist/` and served at `/parrot/ui` when the plugin loads.
+The `packages/plugin` workspace builds and publishes the plugin. The `packages/ui` workspace builds the React UI, which is bundled into `packages/plugin/ui-dist/` and served at `/gateforge-parrot/ui` when the plugin loads.
 
 ```bash
 # Build everything

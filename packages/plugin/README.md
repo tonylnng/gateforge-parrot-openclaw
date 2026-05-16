@@ -21,7 +21,7 @@ Then register it in `~/.openclaw/openclaw.json`:
         "enabled": true,
         "publicBaseUrl": "https://parrot.example.com",
         "auth": {
-          "jwtSecret": "${PARROT_JWT_SECRET}",
+          "jwtSecret": "${GATEFORGE_PARROT_JWT_SECRET}",
           "registration": "open"
         },
         "database": {
@@ -40,19 +40,19 @@ Then register it in `~/.openclaw/openclaw.json`:
 Generate a JWT secret:
 
 ```bash
-export PARROT_JWT_SECRET="$(openssl rand -base64 48)"
+export GATEFORGE_PARROT_JWT_SECRET="$(openssl rand -base64 48)"
 ```
 
 Restart OpenClaw. The plugin will:
 1. Auto-detect your database driver (PostgreSQL or SQLite) from OpenClaw's own config.
-2. Run schema migrations under the `parrot_*` table namespace.
-3. Mount the API at `/parrot/api/v1/*` and the web UI at `/parrot/ui`.
+2. Run schema migrations under the `gateforge_parrot_*` table namespace.
+3. Mount the API at `/gateforge-parrot/api/v1/*` and the web UI at `/gateforge-parrot/ui`.
 
 ## What you get
 
-- **Web UI** at `/parrot/ui` — sign up, sign in, chat (all encryption happens in the browser).
-- **REST API** at `/parrot/api/v1/*` — auth, conversations, messages.
-- **WebSocket** at `/parrot/ws` — low-latency message streaming (Phase 2).
+- **Web UI** at `/gateforge-parrot/ui` — sign up, sign in, chat (all encryption happens in the browser).
+- **REST API** at `/gateforge-parrot/api/v1/*` — auth, conversations, messages.
+- **WebSocket** at `/gateforge-parrot/ws` — low-latency message streaming (Phase 2).
 
 ## Security model
 
@@ -69,15 +69,15 @@ See [`SECURITY.md`](https://github.com/tonylnng/gateforge-parrot-openclaw/blob/m
 |------|---------|-------------|
 | `enabled` | `true` | Master switch. |
 | `publicBaseUrl` | — | Public URL for CORS / invite links. |
-| `ui.enabled` | `true` | Serve bundled UI at `/parrot/ui`. |
-| `ui.basePath` | `/parrot/ui` | Mount path. |
-| `api.basePath` | `/parrot/api/v1` | REST mount path. |
-| `api.wsPath` | `/parrot/ws` | WebSocket mount path. |
+| `ui.enabled` | `true` | Serve bundled UI at `/gateforge-parrot/ui`. |
+| `ui.basePath` | `/gateforge-parrot/ui` | Mount path. |
+| `api.basePath` | `/gateforge-parrot/api/v1` | REST mount path. |
+| `api.wsPath` | `/gateforge-parrot/ws` | WebSocket mount path. |
 | `auth.jwtSecret` | — (required) | HMAC secret. Min 32 chars. |
 | `auth.registration` | `invite-only` | `open` \| `invite-only` \| `closed`. |
 | `database.driver` | `auto` | `auto` \| `postgres` \| `sqlite`. |
 | `database.url` | inherit | Override DB connection string. |
-| `database.schemaPrefix` | `parrot_` | Table-name prefix. |
+| `database.schemaPrefix` | `gateforge_parrot_` | Table-name prefix. |
 | `tenancy.mode` | `multi` | `multi` \| `single`. |
 | `audit.enabled` | `true` | Write audit log entries. |
 | `audit.hashChain` | `true` | Tamper-evident hash chain. |

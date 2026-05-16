@@ -4,7 +4,7 @@
   "description": "Zero-knowledge end-to-end encrypted chat channel with a built-in web UI. Even server admins cannot read message contents.",
   "version": "0.1.0",
   "kind": "channel",
-  "channels": ["parrot"],
+  "channels": ["gateforge-parrot"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -17,7 +17,7 @@
       "publicBaseUrl": {
         "type": "string",
         "format": "uri",
-        "description": "Public-facing base URL where Parrot UI is reachable (e.g. https://parrot.example.com or Tailscale URL). Used for invite links and CORS."
+        "description": "Public-facing base URL where the OpenClaw gateway is reachable (e.g. https://your-host.your-tailnet.ts.net:18789). Used for invite links and CORS."
       },
       "ui": {
         "type": "object",
@@ -26,11 +26,11 @@
           "enabled": {
             "type": "boolean",
             "default": true,
-            "description": "Serve the bundled React UI at /parrot/ui. Disable if you host the UI separately."
+            "description": "Serve the bundled React UI at /gateforge-parrot/ui. Disable if you host the UI separately."
           },
           "basePath": {
             "type": "string",
-            "default": "/parrot/ui",
+            "default": "/gateforge-parrot/ui",
             "description": "Mount path for the bundled UI."
           }
         }
@@ -41,12 +41,12 @@
         "properties": {
           "basePath": {
             "type": "string",
-            "default": "/parrot/api/v1",
+            "default": "/gateforge-parrot/api/v1",
             "description": "Mount path for REST API."
           },
           "wsPath": {
             "type": "string",
-            "default": "/parrot/ws",
+            "default": "/gateforge-parrot/ws",
             "description": "WebSocket endpoint path."
           },
           "rateLimit": {
@@ -108,11 +108,11 @@
           },
           "url": {
             "type": "string",
-            "description": "Database URL. For postgres: postgres://user:pass@host:port/db. For sqlite: file:./parrot.db. Omit to inherit from OpenClaw."
+            "description": "Database URL. For postgres: postgres://user:pass@host:port/db. For sqlite: file:./gateforge-parrot.db. Omit to inherit from OpenClaw."
           },
           "schemaPrefix": {
             "type": "string",
-            "default": "parrot_",
+            "default": "gateforge_parrot_",
             "description": "Table name prefix to avoid collision with OpenClaw core tables."
           },
           "runMigrationsOnStart": {

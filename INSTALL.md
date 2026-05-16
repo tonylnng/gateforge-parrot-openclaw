@@ -9,12 +9,12 @@ Parrot is **not a standalone server** — it's a channel plugin that piggybacks 
 ```
 OpenClaw Gateway (e.g. https://your-host:18789)
 │
-├─ /parrot/ui       ← React UI (bundled)
-├─ /parrot/api/v1   ← REST API
-└─ /parrot/ws       ← WebSocket endpoint
+├─ /gateforge-parrot/ui       ← React UI (bundled)
+├─ /gateforge-parrot/api/v1   ← REST API
+└─ /gateforge-parrot/ws       ← WebSocket endpoint
 ```
 
-So your **Parrot URL = OpenClaw gateway URL + `/parrot/ui`**. You do not run a separate web server.
+So your **Parrot URL = OpenClaw gateway URL + `/gateforge-parrot/ui`**. You do not run a separate web server.
 
 ## Prerequisites
 
@@ -124,10 +124,10 @@ Edit `~/.openclaw/openclaw.json` and add a `plugins.entries["gateforge-parrot"]`
 If you'd rather not paste the JWT secret into `openclaw.json`, export it as an env var instead:
 
 ```bash
-export PARROT_JWT_SECRET="$(openssl rand -base64 48)"
+export GATEFORGE_PARROT_JWT_SECRET="$(openssl rand -base64 48)"
 ```
 
-Then use `"jwtSecret": "${PARROT_JWT_SECRET}"` in the config. Add the `export` line to your shell startup file or OpenClaw's systemd unit so it persists across restarts.
+Then use `"jwtSecret": "${GATEFORGE_PARROT_JWT_SECRET}"` in the config. Add the `export` line to your shell startup file or OpenClaw's systemd unit so it persists across restarts.
 
 ## Step 5 — Restart the gateway
 
@@ -138,18 +138,18 @@ openclaw gateway restart
 You should see in the logs:
 
 ```
-[parrot] Database ready (driver=sqlite, prefix=parrot_)
-[parrot] HTTP routes registered under /parrot/api/v1
-[parrot] GateForge Parrot 🦜 loaded — channel='parrot', tenancy=multi
-[parrot] Parrot ready on channel 'parrot'
+[gateforge-parrot] Database ready (driver=sqlite, prefix=parrot_)
+[gateforge-parrot] HTTP routes registered under /gateforge-parrot/api/v1
+[gateforge-parrot] GateForge Parrot 🦜 loaded — channel='parrot', tenancy=multi
+[gateforge-parrot] Parrot ready on channel 'parrot'
 ```
 
 ## Step 6 — Open the UI
 
-Visit `<publicBaseUrl>/parrot/ui` in your browser, e.g.:
+Visit `<publicBaseUrl>/gateforge-parrot/ui` in your browser, e.g.:
 
 ```
-https://your-host.your-tailnet.ts.net:18789/parrot/ui
+https://your-host.your-tailnet.ts.net:18789/gateforge-parrot/ui
 ```
 
 - Click **Sign up** to create the first account.
@@ -158,7 +158,7 @@ https://your-host.your-tailnet.ts.net:18789/parrot/ui
 ## Health check
 
 ```bash
-curl <publicBaseUrl>/parrot/api/v1/health
+curl <publicBaseUrl>/gateforge-parrot/api/v1/health
 # → {"status":"ok","plugin":"gateforge-parrot","version":"0.1.0"}
 ```
 
@@ -171,8 +171,8 @@ curl <publicBaseUrl>/parrot/api/v1/health
 | `publicBaseUrl` | `openclaw.json` | Your OpenClaw gateway URL |
 | `auth.jwtSecret` | `openclaw.json` or env | `openssl rand -base64 48` |
 | Database | Auto-detected | Inherits from OpenClaw |
-| UI mount path | Default | `/parrot/ui` |
-| API mount path | Default | `/parrot/api/v1` |
+| UI mount path | Default | `/gateforge-parrot/ui` |
+| API mount path | Default | `/gateforge-parrot/api/v1` |
 | Multi-tenant | Default | ON |
 | Registration | Configurable | `invite-only` recommended |
 
@@ -183,7 +183,7 @@ curl <publicBaseUrl>/parrot/api/v1/health
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | `Configuration invalid: auth.jwtSecret must be set` | JWT secret missing or under 32 chars | Regenerate with `openssl rand -base64 48` and update config. |
-| `/parrot/ui` shows the stub page | UI bundle missing | Re-run `npm run build:all`, then `openclaw plugins install ./packages/plugin` again. |
+| `/gateforge-parrot/ui` shows the stub page | UI bundle missing | Re-run `npm run build:all`, then `openclaw plugins install ./packages/plugin` again. |
 | `database.url must start with 'postgres://'` | Wrong driver string | Match `driver` to your URL scheme, or use `driver: "auto"`. |
 | Sign-in succeeds but messages show `[decryption failed]` | Master key wasn't re-derived (wrong password, or salt changed) | Sign out, sign in again with the original password. |
 | `openclaw plugins install` reports unknown command | OpenClaw version too old | Upgrade to `>=2026.3.24-beta.2`. |
@@ -215,4 +215,4 @@ Migrations run automatically on next restart.
 openclaw plugins uninstall gateforge-parrot
 ```
 
-Then remove the `gateforge-parrot` entry from `openclaw.json`. The `parrot_*` tables will remain in your database — drop them manually if you want a full wipe.
+Then remove the `gateforge-parrot` entry from `openclaw.json`. The `gateforge_parrot_*` tables will remain in your database — drop them manually if you want a full wipe.

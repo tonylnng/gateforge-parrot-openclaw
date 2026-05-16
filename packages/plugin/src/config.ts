@@ -19,10 +19,10 @@ export const DEFAULT_CONFIG: Omit<ParrotConfig, "auth" | "publicBaseUrl"> & {
   auth: Omit<ParrotConfig["auth"], "jwtSecret"> & { jwtSecret?: string };
 } = {
   enabled: true,
-  ui: { enabled: true, basePath: "/parrot/ui" },
+  ui: { enabled: true, basePath: "/gateforge-parrot/ui" },
   api: {
-    basePath: "/parrot/api/v1",
-    wsPath: "/parrot/ws",
+    basePath: "/gateforge-parrot/api/v1",
+    wsPath: "/gateforge-parrot/ws",
     rateLimit: { windowMs: 60_000, maxRequests: 120 },
   },
   auth: {
@@ -33,7 +33,7 @@ export const DEFAULT_CONFIG: Omit<ParrotConfig, "auth" | "publicBaseUrl"> & {
   },
   database: {
     driver: "auto",
-    schemaPrefix: "parrot_",
+    schemaPrefix: "gateforge_parrot_",
     runMigrationsOnStart: true,
   },
   tenancy: { mode: "multi", defaultTenantId: "default" },
@@ -55,7 +55,7 @@ export function resolveConfig(raw: unknown): ParrotConfig {
     auth: {
       ...DEFAULT_CONFIG.auth,
       ...(user.auth ?? {}),
-      jwtSecret: user.auth?.jwtSecret ?? process.env.PARROT_JWT_SECRET ?? "",
+      jwtSecret: user.auth?.jwtSecret ?? process.env.GATEFORGE_PARROT_JWT_SECRET ?? "",
       argon2: { ...DEFAULT_CONFIG.auth.argon2, ...(user.auth?.argon2 ?? {}) },
     },
     database: { ...DEFAULT_CONFIG.database, ...(user.database ?? {}) },
@@ -73,7 +73,7 @@ function validate(cfg: ParrotConfig): void {
   if (!cfg.auth.jwtSecret || cfg.auth.jwtSecret.length < 32) {
     throw new ConfigError(
       "auth.jwtSecret must be set and at least 32 characters. " +
-        "Generate one with: openssl rand -base64 48 — or set PARROT_JWT_SECRET in the environment.",
+        "Generate one with: openssl rand -base64 48 — or set GATEFORGE_PARROT_JWT_SECRET in the environment.",
     );
   }
   if (cfg.auth.accessTokenTtlSeconds < 60) {

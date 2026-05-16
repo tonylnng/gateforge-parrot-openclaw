@@ -9,10 +9,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Next: v0.2.0 (Phase 2 — Agent integration)
-- Wire `llm_input` / `llm_output` hooks to stream assistant responses through WebSocket
-- Server-side prompt assembly with transient plaintext
-- Conversation summarisation hook (`before_compaction`)
+### Design — Phase 2 (Integration API + Session Management)
+- `INTEGRATION_API.md` — full Phase 2 design spec with 7 Mermaid diagrams (architecture, workflow, state, sequence, ER, data-flow, user journey)
+- Chat session management: list / create / rename / pin / archive / delete / export / search (titles are encrypted client-side, hard delete uses crypto-shred)
+- Scoped API key system with Bearer auth, idempotency, per-key + per-tenant rate limiting
+- `@gateforge/parrot-sdk` JS SDK + reference WebCrypto wire format spec
+- Outbound webhooks (HMAC-signed, metadata only, retry with backoff)
+- Static `openapi.yaml` 3.1 spec with drift CI check
+- Public surface fully renamed from `parrot` → `gateforge-parrot` (URL paths, DB tables, env vars, log tags, code identifiers) — clean-slate since pre-1.0 with no production deployments
+
+### Next: v0.2.0 (Phase 2 — Implementation)
+- Wire `llm_input` / `llm_output` hooks to stream assistant responses through SSE
+- Build session management UI + REST endpoints
+- Ship `@gateforge/parrot-sdk` to npm
+- Outbound webhook dispatcher + delivery log
 
 ---
 
@@ -20,7 +30,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added — Phase 1 (Plugin Skeleton + Bundled UI)
 - **`@gateforge/parrot-openclaw`** npm package with compiled `dist/`, migrations, and bundled UI
-- **`@gateforge/parrot-ui`** React 18 + Vite frontend, served at `/parrot/ui`
+- **`@gateforge/parrot-ui`** React 18 + Vite frontend, served at `/gateforge-parrot/ui`
 - `openclaw.plugin.json` manifest with full JSON Schema for configuration
 - Drizzle ORM schema and raw-SQL migrations for both PostgreSQL and SQLite
 - Auto-detect database driver from OpenClaw's runtime config
@@ -30,7 +40,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Conversations + messages REST API (server stores only ciphertext)
 - Browser-side crypto: Argon2id KDF (`hash-wasm`), AES-256-GCM, AES-KW key wrapping
 - Tamper-evident hash-chained audit log
-- WebSocket scaffold at `/parrot/ws` (frame echo + auth verification)
+- WebSocket scaffold at `/gateforge-parrot/ws` (frame echo + auth verification)
 - Static-file SPA server with fallback stub when UI bundle is absent
 - `INSTALL.md` step-by-step guide for OpenClaw operators
 

@@ -153,7 +153,7 @@ export function Chat() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <span className="parrot-logo" aria-hidden>🦜</span>
+          <span className="gf-parrot-logo" aria-hidden>🦜</span>
           <h1>Parrot</h1>
         </div>
         <div className="sidebar-actions">
