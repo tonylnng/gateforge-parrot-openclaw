@@ -1,21 +1,33 @@
 /**
  * OpenClaw lifecycle hook handlers.
  *
- * Parrot stays out of the agent's prompt-building path on purpose: the
- * agent sees only the transient plaintext that the BFF gateway already passes
- * it; we never inject or rewrite. These hooks exist for observability and
- * audit only.
+ * The hooks themselves stay strictly observational on the server. Real prompt
+ * assembly with decrypted history happens on the client; the server only ever
+ * sees ciphertext or non-sensitive metadata.
  *
- * Real prompt assembly with decrypted history happens in the gateway path,
- * not here — see PLUGIN_DESIGN.md "Phase 2" for the full plan.
+ * SSE streaming bridge: when `llm_output` fires with a `meta.streamTag` set,
+ * we forward the chunk to the matching SSE writer via the `StreamRegistry`.
+ * The gateway is responsible for re-encrypting plaintext deltas with the
+ * client-shared conversation key before they reach this hook — see
+ * INTEGRATION_API.md "Streaming wire" for details.
  */
 import type { DbHandle } from "../db/index.js";
 import { appendAudit } from "../auth/audit.js";
+import { enqueueEvent, startDispatcher } from "../webhooks/dispatcher.js";
+import type { StreamRegistry } from "../routes/sse.js";
 import type { OpenClawPluginApiLite, ParrotConfig, ParrotLogger } from "../types.js";
 import { CHANNEL_ID } from "../types.js";
 
-export function registerHooks(args: { api: OpenClawPluginApiLite; cfg: ParrotConfig; db: DbHandle; logger: ParrotLogger }): void {
-  const { api, cfg, db, logger } = args;
+export interface HookArgs {
+  api: OpenClawPluginApiLite;
+  cfg: ParrotConfig;
+  db: DbHandle;
+  logger: ParrotLogger;
+  streamRegistry: StreamRegistry;
+}
+
+export function registerHooks(args: HookArgs): { stopDispatcher: () => void } {
+  const { api, cfg, db, logger, streamRegistry } = args;
 
   api.registerHook("llm_input", async (payload) => {
     if (payload.channelId !== CHANNEL_ID) return;
@@ -35,6 +47,27 @@ export function registerHooks(args: { api: OpenClawPluginApiLite; cfg: ParrotCon
       action: "llm.output",
       payload: { bytes: payload.content.length },
     });
+
+    // Bridge into active SSE streams. The gateway must have set
+    // `meta.streamTag` and have already re-encrypted the chunk against the
+    // per-conversation key. If the chunk is plaintext (no streamTag), we skip
+    // — Parrot never leaks plaintext over the wire on its API surface.
+    const tag = typeof payload.meta?.streamTag === "string" ? (payload.meta.streamTag as string) : undefined;
+    if (!tag) return;
+    streamRegistry.push(tag, { event: "chunk", data: { delta: payload.content } });
+  });
+
+  api.registerHook("session_start", async (payload) => {
+    if (payload.channelId !== CHANNEL_ID) return;
+    void enqueueEvent(
+      db,
+      {
+        tenantId: cfg.tenancy.defaultTenantId,
+        event: "session.created",
+        payload: { sessionId: payload.sessionId, at: Date.now() },
+      },
+      logger,
+    );
   });
 
   api.registerHook("gateway_start", () => {
@@ -44,4 +77,7 @@ export function registerHooks(args: { api: OpenClawPluginApiLite; cfg: ParrotCon
   api.registerHook("gateway_stop", () => {
     logger.info("Parrot shutting down");
   });
+
+  const stopDispatcher = startDispatcher(db, logger);
+  return { stopDispatcher };
 }

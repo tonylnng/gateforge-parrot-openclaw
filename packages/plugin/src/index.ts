@@ -82,8 +82,8 @@ async function bootstrap(api: OpenClawPluginApiLite): Promise<RuntimeState | nul
   }
   logger.info(`Database ready (driver=${db.driver}, prefix=${db.prefix})`);
 
-  registerHttp({ api, cfg, db, logger });
-  registerHooks({ api, cfg, db, logger });
+  const { streamRegistry } = registerHttp({ api, cfg, db, logger });
+  registerHooks({ api, cfg, db, logger, streamRegistry });
 
   logger.info(`GateForge Parrot 🦜 loaded — channel='${CHANNEL_ID}', tenancy=${cfg.tenancy.mode}`);
   return { cfg, db };

@@ -62,17 +62,25 @@ export function buildSqliteSchema(prefix: string) {
       id: text("id").primaryKey(),
       tenantId: text("tenant_id").notNull(),
       ownerId: text("owner_id").notNull(),
-      title: text("title"), // optional plaintext title (user-set). Use encryptedTitle for sensitive.
-      encryptedTitle: text("encrypted_title"), // base64 ciphertext (AES-256-GCM)
+      title: text("title"), // optional plaintext title (legacy/dev). Production should always use encryptedTitle.
+      encryptedTitle: text("encrypted_title"), // base64 ciphertext (AES-256-GCM) — preferred
       // Conversation key wrapped with user's master key. The server only sees the wrapped form.
       wrappedConversationKey: text("wrapped_conversation_key").notNull(), // base64
+      agentId: text("agent_id"), // OpenClaw agent reference (Phase 2b)
+      isPinned: integer("is_pinned").notNull().default(0),
+      isArchived: integer("is_archived").notNull().default(0),
+      pinnedAt: integer("pinned_at"),
+      archivedAt: integer("archived_at"),
+      lastMessageAt: integer("last_message_at"),
+      messageCount: integer("message_count").notNull().default(0),
       createdAt: integer("created_at").notNull(),
       updatedAt: integer("updated_at").notNull(),
-      archived: integer("archived").notNull().default(0),
+      deletedAt: integer("deleted_at"), // soft-delete; crypto-shred drops wrappedConversationKey
     },
     (table) => ({
       ownerIdx: index(`${t("conversations")}_owner_idx`).on(table.ownerId, table.tenantId),
       updatedIdx: index(`${t("conversations")}_updated_idx`).on(table.tenantId, table.updatedAt),
+      pinnedIdx: index(`${t("conversations")}_pinned_idx`).on(table.ownerId, table.isPinned, table.lastMessageAt),
     }),
   );
 
@@ -162,7 +170,68 @@ export function buildSqliteSchema(prefix: string) {
     }),
   );
 
-  return { tenants, users, conversations, messages, apiKeys, auditLog, refreshTokens };
+  const webhooks = sqliteTable(
+    t("webhooks"),
+    {
+      id: text("id").primaryKey(),
+      tenantId: text("tenant_id").notNull(),
+      userId: text("user_id").notNull(),
+      url: text("url").notNull(),
+      secretHash: text("secret_hash").notNull(), // sha256 of HMAC secret (we keep secret in column too — see secret)
+      secret: text("secret").notNull(), // shown once to creator, used by us to sign deliveries
+      events: text("events").notNull(), // JSON array
+      enabled: integer("enabled").notNull().default(1),
+      createdAt: integer("created_at").notNull(),
+      disabledAt: integer("disabled_at"),
+      lastDeliveryAt: integer("last_delivery_at"),
+      consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    },
+    (table) => ({
+      tenantIdx: index(`${t("webhooks")}_tenant_idx`).on(table.tenantId),
+      userIdx: index(`${t("webhooks")}_user_idx`).on(table.userId),
+    }),
+  );
+
+  const webhookDeliveries = sqliteTable(
+    t("webhook_deliveries"),
+    {
+      id: text("id").primaryKey(),
+      webhookId: text("webhook_id").notNull(),
+      eventType: text("event_type").notNull(),
+      payload: text("payload").notNull(), // JSON, metadata only — no plaintext
+      attempt: integer("attempt").notNull().default(1),
+      responseCode: integer("response_code"),
+      deliveredAt: integer("delivered_at"),
+      nextRetryAt: integer("next_retry_at"),
+      lastError: text("last_error"),
+      createdAt: integer("created_at").notNull(),
+    },
+    (table) => ({
+      webhookIdx: index(`${t("webhook_deliveries")}_webhook_idx`).on(table.webhookId, table.createdAt),
+      pendingIdx: index(`${t("webhook_deliveries")}_pending_idx`).on(table.nextRetryAt),
+    }),
+  );
+
+  const idempotency = sqliteTable(
+    t("idempotency"),
+    {
+      id: text("id").primaryKey(), // sha256(tenantId|principalId|key)
+      tenantId: text("tenant_id").notNull(),
+      principalId: text("principal_id").notNull(),
+      idempotencyKey: text("idempotency_key").notNull(),
+      method: text("method").notNull(),
+      path: text("path").notNull(),
+      responseStatus: integer("response_status").notNull(),
+      responseBody: text("response_body").notNull(),
+      createdAt: integer("created_at").notNull(),
+      expiresAt: integer("expires_at").notNull(),
+    },
+    (table) => ({
+      expiresIdx: index(`${t("idempotency")}_expires_idx`).on(table.expiresAt),
+    }),
+  );
+
+  return { tenants, users, conversations, messages, apiKeys, auditLog, refreshTokens, webhooks, webhookDeliveries, idempotency };
 }
 
 /** Build PostgreSQL schema with a runtime-resolved table-name prefix. */
@@ -207,13 +276,21 @@ export function buildPostgresSchema(prefix: string) {
       title: pgText("title"),
       encryptedTitle: pgText("encrypted_title"),
       wrappedConversationKey: pgText("wrapped_conversation_key").notNull(),
+      agentId: pgText("agent_id"),
+      isPinned: pgInteger("is_pinned").notNull().default(0),
+      isArchived: pgInteger("is_archived").notNull().default(0),
+      pinnedAt: pgBigint("pinned_at", { mode: "number" }),
+      archivedAt: pgBigint("archived_at", { mode: "number" }),
+      lastMessageAt: pgBigint("last_message_at", { mode: "number" }),
+      messageCount: pgInteger("message_count").notNull().default(0),
       createdAt: pgBigint("created_at", { mode: "number" }).notNull(),
       updatedAt: pgBigint("updated_at", { mode: "number" }).notNull(),
-      archived: pgInteger("archived").notNull().default(0),
+      deletedAt: pgBigint("deleted_at", { mode: "number" }),
     },
     (table) => ({
       ownerIdx: pgIndex(`${t("conversations")}_owner_idx`).on(table.ownerId, table.tenantId),
       updatedIdx: pgIndex(`${t("conversations")}_updated_idx`).on(table.tenantId, table.updatedAt),
+      pinnedIdx: pgIndex(`${t("conversations")}_pinned_idx`).on(table.ownerId, table.isPinned, table.lastMessageAt),
     }),
   );
 
@@ -292,7 +369,68 @@ export function buildPostgresSchema(prefix: string) {
     }),
   );
 
-  return { tenants, users, conversations, messages, apiKeys, auditLog, refreshTokens };
+  const webhooks = pgTable(
+    t("webhooks"),
+    {
+      id: pgText("id").primaryKey(),
+      tenantId: pgText("tenant_id").notNull(),
+      userId: pgText("user_id").notNull(),
+      url: pgText("url").notNull(),
+      secretHash: pgText("secret_hash").notNull(),
+      secret: pgText("secret").notNull(),
+      events: pgText("events").notNull(),
+      enabled: pgInteger("enabled").notNull().default(1),
+      createdAt: pgBigint("created_at", { mode: "number" }).notNull(),
+      disabledAt: pgBigint("disabled_at", { mode: "number" }),
+      lastDeliveryAt: pgBigint("last_delivery_at", { mode: "number" }),
+      consecutiveFailures: pgInteger("consecutive_failures").notNull().default(0),
+    },
+    (table) => ({
+      tenantIdx: pgIndex(`${t("webhooks")}_tenant_idx`).on(table.tenantId),
+      userIdx: pgIndex(`${t("webhooks")}_user_idx`).on(table.userId),
+    }),
+  );
+
+  const webhookDeliveries = pgTable(
+    t("webhook_deliveries"),
+    {
+      id: pgText("id").primaryKey(),
+      webhookId: pgText("webhook_id").notNull(),
+      eventType: pgText("event_type").notNull(),
+      payload: pgText("payload").notNull(),
+      attempt: pgInteger("attempt").notNull().default(1),
+      responseCode: pgInteger("response_code"),
+      deliveredAt: pgBigint("delivered_at", { mode: "number" }),
+      nextRetryAt: pgBigint("next_retry_at", { mode: "number" }),
+      lastError: pgText("last_error"),
+      createdAt: pgBigint("created_at", { mode: "number" }).notNull(),
+    },
+    (table) => ({
+      webhookIdx: pgIndex(`${t("webhook_deliveries")}_webhook_idx`).on(table.webhookId, table.createdAt),
+      pendingIdx: pgIndex(`${t("webhook_deliveries")}_pending_idx`).on(table.nextRetryAt),
+    }),
+  );
+
+  const idempotency = pgTable(
+    t("idempotency"),
+    {
+      id: pgText("id").primaryKey(),
+      tenantId: pgText("tenant_id").notNull(),
+      principalId: pgText("principal_id").notNull(),
+      idempotencyKey: pgText("idempotency_key").notNull(),
+      method: pgText("method").notNull(),
+      path: pgText("path").notNull(),
+      responseStatus: pgInteger("response_status").notNull(),
+      responseBody: pgText("response_body").notNull(),
+      createdAt: pgBigint("created_at", { mode: "number" }).notNull(),
+      expiresAt: pgBigint("expires_at", { mode: "number" }).notNull(),
+    },
+    (table) => ({
+      expiresIdx: pgIndex(`${t("idempotency")}_expires_idx`).on(table.expiresAt),
+    }),
+  );
+
+  return { tenants, users, conversations, messages, apiKeys, auditLog, refreshTokens, webhooks, webhookDeliveries, idempotency };
 }
 
 /** Logical table names regardless of driver, for typed access. */

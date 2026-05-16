@@ -34,14 +34,23 @@ CREATE TABLE IF NOT EXISTS {{prefix}}conversations (
   title                     TEXT,
   encrypted_title           TEXT,
   wrapped_conversation_key  TEXT NOT NULL,
+  agent_id                  TEXT,
+  is_pinned                 INTEGER NOT NULL DEFAULT 0,
+  is_archived               INTEGER NOT NULL DEFAULT 0,
+  pinned_at                 BIGINT,
+  archived_at               BIGINT,
+  last_message_at           BIGINT,
+  message_count             INTEGER NOT NULL DEFAULT 0,
   created_at                BIGINT NOT NULL,
   updated_at                BIGINT NOT NULL,
-  archived                  INTEGER NOT NULL DEFAULT 0
+  deleted_at                BIGINT
 );
 CREATE INDEX IF NOT EXISTS {{prefix}}conversations_owner_idx
   ON {{prefix}}conversations (owner_id, tenant_id);
 CREATE INDEX IF NOT EXISTS {{prefix}}conversations_updated_idx
   ON {{prefix}}conversations (tenant_id, updated_at);
+CREATE INDEX IF NOT EXISTS {{prefix}}conversations_pinned_idx
+  ON {{prefix}}conversations (owner_id, is_pinned, last_message_at);
 
 CREATE TABLE IF NOT EXISTS {{prefix}}messages (
   id              TEXT PRIMARY KEY,
@@ -105,3 +114,54 @@ CREATE INDEX IF NOT EXISTS {{prefix}}refresh_tokens_user_idx
   ON {{prefix}}refresh_tokens (user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS {{prefix}}refresh_tokens_hash_uniq
   ON {{prefix}}refresh_tokens (token_hash);
+
+CREATE TABLE IF NOT EXISTS {{prefix}}webhooks (
+  id                     TEXT PRIMARY KEY,
+  tenant_id              TEXT NOT NULL,
+  user_id                TEXT NOT NULL,
+  url                    TEXT NOT NULL,
+  secret_hash            TEXT NOT NULL,
+  secret                 TEXT NOT NULL,
+  events                 TEXT NOT NULL,
+  enabled                INTEGER NOT NULL DEFAULT 1,
+  created_at             BIGINT NOT NULL,
+  disabled_at            BIGINT,
+  last_delivery_at       BIGINT,
+  consecutive_failures   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS {{prefix}}webhooks_tenant_idx
+  ON {{prefix}}webhooks (tenant_id);
+CREATE INDEX IF NOT EXISTS {{prefix}}webhooks_user_idx
+  ON {{prefix}}webhooks (user_id);
+
+CREATE TABLE IF NOT EXISTS {{prefix}}webhook_deliveries (
+  id              TEXT PRIMARY KEY,
+  webhook_id      TEXT NOT NULL,
+  event_type      TEXT NOT NULL,
+  payload         TEXT NOT NULL,
+  attempt         INTEGER NOT NULL DEFAULT 1,
+  response_code   INTEGER,
+  delivered_at    BIGINT,
+  next_retry_at   BIGINT,
+  last_error      TEXT,
+  created_at      BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS {{prefix}}webhook_deliveries_webhook_idx
+  ON {{prefix}}webhook_deliveries (webhook_id, created_at);
+CREATE INDEX IF NOT EXISTS {{prefix}}webhook_deliveries_pending_idx
+  ON {{prefix}}webhook_deliveries (next_retry_at);
+
+CREATE TABLE IF NOT EXISTS {{prefix}}idempotency (
+  id                TEXT PRIMARY KEY,
+  tenant_id         TEXT NOT NULL,
+  principal_id      TEXT NOT NULL,
+  idempotency_key   TEXT NOT NULL,
+  method            TEXT NOT NULL,
+  path              TEXT NOT NULL,
+  response_status   INTEGER NOT NULL,
+  response_body     TEXT NOT NULL,
+  created_at        BIGINT NOT NULL,
+  expires_at        BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS {{prefix}}idempotency_expires_idx
+  ON {{prefix}}idempotency (expires_at);
