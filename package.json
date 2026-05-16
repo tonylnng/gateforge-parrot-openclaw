@@ -1,0 +1,33 @@
+{
+  "name": "gateforge-parrot-openclaw-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Workspace root for GateForge Parrot — zero-knowledge E2EE chat plugin for OpenClaw",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:plugin": "npm run dev --workspace=@gateforge/parrot-openclaw",
+    "dev:ui": "npm run dev --workspace=@gateforge/parrot-ui",
+    "build:plugin": "npm run build --workspace=@gateforge/parrot-openclaw",
+    "build:ui": "npm run build --workspace=@gateforge/parrot-ui",
+    "build:all": "npm run build:ui && npm run build:plugin",
+    "test": "npm run test --workspaces --if-present",
+    "clean": "rm -rf packages/*/dist packages/*/node_modules node_modules"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "author": "Tony Lung <tonylnng@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tonylnng/gateforge-parrot-openclaw.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tonylnng/gateforge-parrot-openclaw/issues"
+  },
+  "homepage": "https://github.com/tonylnng/gateforge-parrot-openclaw#readme"
+}

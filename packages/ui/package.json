@@ -1,0 +1,27 @@
+{
+  "name": "@gateforge/parrot-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "GateForge Parrot 🦜 — browser UI with zero-knowledge E2EE",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && rimraf ../plugin/ui-dist && cp -r dist ../plugin/ui-dist",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "hash-wasm": "^4.12.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "license": "MIT"
+}

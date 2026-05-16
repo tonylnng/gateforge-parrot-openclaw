@@ -54,3 +54,13 @@ Desktop.ini
 openclaw.config.json
 openclaw-local/
 .openclaw/
+
+# Parrot generated artifacts (rebuilt by `npm run build:all`)
+packages/plugin/ui-dist/
+packages/plugin/dist/
+packages/ui/dist/
+*.db
+*.db-journal
+*.sqlite
+parrot.db
+parrot.secret

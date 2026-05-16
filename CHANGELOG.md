@@ -9,12 +9,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Planned for v0.1.0 (Phase 1 — Plugin Skeleton)
-- Plugin manifest (`openclaw.plugin.json`)
-- Drizzle schema + migrations for `parrot_*` tables
-- JWT-based authentication
-- Basic encrypted message storage
-- HTTP route registration via OpenClaw plugin SDK
+### Next: v0.2.0 (Phase 2 — Agent integration)
+- Wire `llm_input` / `llm_output` hooks to stream assistant responses through WebSocket
+- Server-side prompt assembly with transient plaintext
+- Conversation summarisation hook (`before_compaction`)
+
+---
+
+## [0.1.0] — 2026-05-16
+
+### Added — Phase 1 (Plugin Skeleton + Bundled UI)
+- **`@gateforge/parrot-openclaw`** npm package with compiled `dist/`, migrations, and bundled UI
+- **`@gateforge/parrot-ui`** React 18 + Vite frontend, served at `/parrot/ui`
+- `openclaw.plugin.json` manifest with full JSON Schema for configuration
+- Drizzle ORM schema and raw-SQL migrations for both PostgreSQL and SQLite
+- Auto-detect database driver from OpenClaw's runtime config
+- Auth: signup, login, refresh, logout, whoami — with Argon2id password hashing
+- JWT issuance via `jose` (HS256), refresh-token rotation, revocation tracking
+- Multi-tenant from day 1: tenant table + JWT tenant scoping
+- Conversations + messages REST API (server stores only ciphertext)
+- Browser-side crypto: Argon2id KDF (`hash-wasm`), AES-256-GCM, AES-KW key wrapping
+- Tamper-evident hash-chained audit log
+- WebSocket scaffold at `/parrot/ws` (frame echo + auth verification)
+- Static-file SPA server with fallback stub when UI bundle is absent
+- `INSTALL.md` step-by-step guide for OpenClaw operators
 
 ---
 

@@ -3,7 +3,7 @@
 > Zero-knowledge, end-to-end encrypted chat channel for [OpenClaw](https://openclaw.ai) — a native plugin that turns your OpenClaw Gateway into an embeddable, secure web chat platform.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-design-yellow.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-phase--1--MVP-green.svg)](#project-status)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-plugin-purple.svg)](https://openclaw.ai)
 
 ---
@@ -135,12 +135,12 @@ flowchart LR
 | Phase | Status | Scope |
 |-------|--------|-------|
 | **0** | ✅ Done | Architecture & security design, crypto PoC |
-| **1** | 🚧 Next | Plugin skeleton, manifest, DB migration, JWT auth |
-| **2** | ⏳ | `before_prompt_build` + `after_response_generated` hooks |
-| **3** | ⏳ | React SPA served at `/parrot/ui` |
+| **1** | ✅ Done | Plugin skeleton, manifest, DB migration, JWT auth, bundled React UI |
+| **2** | 🚧 Next | `llm_input` + `llm_output` hooks wired to agent streaming |
+| **3** | ⏳ | Polished UI: streaming responses, model picker, settings |
 | **4** | ⏳ | REST API + API keys for 3rd-party integration |
 | **5** | ⏳ | JS SDK + embeddable widget |
-| **6** | ⏳ | Multi-tenant + audit log verification CLI |
+| **6** | ⏳ | Audit log verification CLI, password recovery via shards |
 | **7** | ⏳ | Publish to ClawHub registry |
 
 See [PLUGIN_DESIGN.md](./PLUGIN_DESIGN.md#revised-implementation-phases) for full phase breakdown.
@@ -149,11 +149,17 @@ See [PLUGIN_DESIGN.md](./PLUGIN_DESIGN.md#revised-implementation-phases) for ful
 
 ## Project Status
 
-🏗️ **Design phase — feedback welcome.**
+🚀 **Phase 1 MVP shipped** — install instructions in [`INSTALL.md`](./INSTALL.md).
 
-The documents in this repo represent the complete design for v0.1. Code implementation begins once the design is reviewed.
+The `packages/plugin` workspace builds and publishes the plugin. The `packages/ui` workspace builds the React UI, which is bundled into `packages/plugin/ui-dist/` and served at `/parrot/ui` when the plugin loads.
 
-If you have feedback on the architecture, security model, or naming, please [open an issue](https://github.com/tonylnng/gateforge-parrot-openclaw/issues).
+```bash
+# Build everything
+npm install
+npm run build:all
+```
+
+If you have feedback or hit issues, please [open an issue](https://github.com/tonylnng/gateforge-parrot-openclaw/issues).
 
 ---
 

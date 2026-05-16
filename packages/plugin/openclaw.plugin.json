@@ -1,0 +1,168 @@
+{
+  "id": "gateforge-parrot",
+  "name": "GateForge Parrot",
+  "description": "Zero-knowledge end-to-end encrypted chat channel with a built-in web UI. Even server admins cannot read message contents.",
+  "version": "0.1.0",
+  "kind": "channel",
+  "channels": ["parrot"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Master switch for the Parrot plugin."
+      },
+      "publicBaseUrl": {
+        "type": "string",
+        "format": "uri",
+        "description": "Public-facing base URL where Parrot UI is reachable (e.g. https://parrot.example.com or Tailscale URL). Used for invite links and CORS."
+      },
+      "ui": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Serve the bundled React UI at /parrot/ui. Disable if you host the UI separately."
+          },
+          "basePath": {
+            "type": "string",
+            "default": "/parrot/ui",
+            "description": "Mount path for the bundled UI."
+          }
+        }
+      },
+      "api": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "basePath": {
+            "type": "string",
+            "default": "/parrot/api/v1",
+            "description": "Mount path for REST API."
+          },
+          "wsPath": {
+            "type": "string",
+            "default": "/parrot/ws",
+            "description": "WebSocket endpoint path."
+          },
+          "rateLimit": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "windowMs": { "type": "integer", "default": 60000 },
+              "maxRequests": { "type": "integer", "default": 120 }
+            }
+          }
+        }
+      },
+      "auth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jwtSecret"],
+        "properties": {
+          "jwtSecret": {
+            "type": "string",
+            "minLength": 32,
+            "description": "HMAC secret for signing JWTs. Min 32 chars. Generate with: openssl rand -base64 48"
+          },
+          "accessTokenTtlSeconds": {
+            "type": "integer",
+            "default": 900,
+            "description": "Access token lifetime in seconds (default 15 minutes)."
+          },
+          "refreshTokenTtlSeconds": {
+            "type": "integer",
+            "default": 2592000,
+            "description": "Refresh token lifetime in seconds (default 30 days)."
+          },
+          "registration": {
+            "type": "string",
+            "enum": ["open", "invite-only", "closed"],
+            "default": "invite-only",
+            "description": "User registration policy."
+          },
+          "argon2": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "memoryCostKiB": { "type": "integer", "default": 65536 },
+              "timeCost": { "type": "integer", "default": 3 },
+              "parallelism": { "type": "integer", "default": 4 }
+            }
+          }
+        }
+      },
+      "database": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "driver": {
+            "type": "string",
+            "enum": ["auto", "postgres", "sqlite"],
+            "default": "auto",
+            "description": "Database driver. 'auto' inherits from OpenClaw's main DB config."
+          },
+          "url": {
+            "type": "string",
+            "description": "Database URL. For postgres: postgres://user:pass@host:port/db. For sqlite: file:./parrot.db. Omit to inherit from OpenClaw."
+          },
+          "schemaPrefix": {
+            "type": "string",
+            "default": "parrot_",
+            "description": "Table name prefix to avoid collision with OpenClaw core tables."
+          },
+          "runMigrationsOnStart": {
+            "type": "boolean",
+            "default": true,
+            "description": "Auto-run pending migrations on plugin load."
+          }
+        }
+      },
+      "tenancy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["multi", "single"],
+            "default": "multi",
+            "description": "Multi-tenant (per-user isolation) or single-tenant (all-in-one) mode."
+          },
+          "defaultTenantId": {
+            "type": "string",
+            "default": "default",
+            "description": "Tenant id used in single-tenant mode."
+          }
+        }
+      },
+      "audit": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean", "default": true },
+          "hashChain": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable tamper-evident hash chaining of audit log entries."
+          }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "auth.jwtSecret": {
+      "label": "JWT Secret",
+      "placeholder": "openssl rand -base64 48",
+      "sensitive": true
+    },
+    "database.url": {
+      "label": "Database URL",
+      "placeholder": "(inherit from OpenClaw)",
+      "sensitive": true
+    }
+  }
+}
