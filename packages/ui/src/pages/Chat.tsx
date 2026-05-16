@@ -13,7 +13,7 @@
  *   - Delete: server crypto-shreds (wipes messages + nulls wrapped key).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, type ConversationRow, type SessionFilter } from "../lib/api";
+import { api, ApiError, streamMessage, type ConversationRow, type SessionFilter } from "../lib/api";
 import { decrypt, encrypt, generateMessageKey, unwrapKey, wrapKey } from "../lib/crypto";
 import { useStore } from "../lib/store";
 import { SessionList } from "../components/SessionList";
@@ -25,7 +25,11 @@ interface DecodedMessage {
   createdAt: number;
 }
 
-export function Chat() {
+interface ChatProps {
+  onOpenAdmin?: () => void;
+}
+
+export function Chat({ onOpenAdmin }: ChatProps = {}) {
   const { accessToken, refreshToken, user, masterKey, logout: storeLogout } = useStore((s) => ({
     accessToken: s.accessToken!,
     refreshToken: s.refreshToken,
@@ -269,24 +273,67 @@ export function Chat() {
     [accessToken, activeId],
   );
 
+  /**
+   * Send a user message and consume the SSE assistant stream.
+   *
+   * Flow:
+   *   1. Encrypt the user draft with the conversation key and POST it as the
+   *      body of the stream endpoint. The server stores it, then emits SSE
+   *      `chunk` events with ciphertext deltas of the assistant reply, and a
+   *      final `done` event with the persisted message id.
+   *   2. As deltas arrive we decrypt each one and append to the assistant
+   *      bubble's text. We allocate the placeholder bubble with a temporary
+   *      id so React can keep it stable; the real id replaces it on `done`.
+   *   3. Any `error` frame (or thrown error) is surfaced to the UI and the
+   *      placeholder is left in place with whatever was decrypted so far.
+   */
   const send = useCallback(async () => {
     if (!activeConv || !convKey || !draft.trim()) return;
     setSending(true);
     setError(null);
     const text = draft;
     setDraft("");
+    const userTempId = `tmp-u-${crypto.randomUUID()}`;
+    const asstTempId = `tmp-a-${crypto.randomUUID()}`;
     try {
       const ciphertext = await encrypt(text, convKey);
-      const r = await api.appendMessage(
+      // Optimistic user bubble — server will persist via the stream endpoint.
+      setMessages((prev) => [
+        ...prev,
+        { id: userTempId, role: "user", text, createdAt: Date.now() },
+        { id: asstTempId, role: "assistant", text: "", createdAt: Date.now() },
+      ]);
+
+      let assistantBuf = "";
+      const iter = streamMessage(
         accessToken,
         activeConv.id,
         { role: "user", ciphertext },
-        crypto.randomUUID(),
+        { idempotencyKey: crypto.randomUUID() },
       );
-      setMessages((prev) => [
-        ...prev,
-        { id: r.message.id, role: "user", text, createdAt: r.message.createdAt },
-      ]);
+      for await (const frame of iter) {
+        if (frame.event === "chunk") {
+          try {
+            const piece = await decrypt(frame.data.delta, convKey);
+            assistantBuf += piece;
+            setMessages((prev) =>
+              prev.map((m) => (m.id === asstTempId ? { ...m, text: assistantBuf } : m)),
+            );
+          } catch {
+            /* skip undecryptable chunk */
+          }
+        } else if (frame.event === "done") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === asstTempId
+                ? { ...m, id: frame.data.messageId, createdAt: frame.data.createdAt }
+                : m,
+            ),
+          );
+        } else if (frame.event === "error") {
+          setError(`${frame.data.code}: ${frame.data.message}`);
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -330,6 +377,11 @@ export function Chat() {
         />
         <div className="sidebar-footer">
           <div className="user-email">{user?.email}</div>
+          {onOpenAdmin ? (
+            <button className="btn btn-block btn-link" onClick={onOpenAdmin} title="API keys, webhooks, and audit log">
+              Admin
+            </button>
+          ) : null}
           <button className="btn btn-block" onClick={logout}>Sign out</button>
         </div>
       </aside>
