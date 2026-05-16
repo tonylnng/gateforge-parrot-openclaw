@@ -2,6 +2,8 @@
  * Thin REST client for the Parrot plugin. Adds Authorization headers and
  * surfaces typed errors. The UI is served from the same origin as the API
  * when in production, so we use relative URLs.
+ *
+ * Field shapes mirror packages/plugin/src/routes/* — keep them in sync.
  */
 const API_BASE = "/gateforge-parrot/api/v1";
 
@@ -17,15 +19,29 @@ export class ApiError extends Error {
 }
 
 interface RequestOpts {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   token?: string | null;
+  idempotencyKey?: string;
+  query?: Record<string, string | undefined>;
 }
 
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
-  const res = await fetch(`${API_BASE}${path}`, {
+  if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
+
+  let url = `${API_BASE}${path}`;
+  if (opts.query) {
+    const usp = new URLSearchParams();
+    for (const [k, v] of Object.entries(opts.query)) {
+      if (v !== undefined && v !== null && v !== "") usp.set(k, v);
+    }
+    const qs = usp.toString();
+    if (qs) url += `?${qs}`;
+  }
+
+  const res = await fetch(url, {
     method: opts.method ?? "GET",
     headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
@@ -46,7 +62,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-// -- Auth ----------------------------------------------------------------
+// -- Types ----------------------------------------------------------------
 
 export interface AuthTokens {
   accessToken: string;
@@ -65,7 +81,55 @@ export interface LoginResponse extends AuthTokens {
   wrappedMasterKey: string;
 }
 
+export interface ConversationRow {
+  id: string;
+  title: string | null;
+  encryptedTitle: string | null;
+  wrappedConversationKey: string;
+  agentId: string | null;
+  isPinned: boolean;
+  isArchived: boolean;
+  pinnedAt: number | null;
+  archivedAt: number | null;
+  lastMessageAt: number | null;
+  messageCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type SessionFilter = "active" | "pinned" | "archived" | "all";
+
+export interface MessageRow {
+  id: string;
+  role: "user" | "assistant" | "system" | "tool";
+  ciphertext: string;
+  meta: string | null;
+  createdAt: number;
+}
+
+export interface ApiKeyRow {
+  id: string;
+  prefix: string;
+  label: string;
+  scopes: string[];
+  createdAt: number;
+  lastUsedAt: number | null;
+  revokedAt: number | null;
+}
+
+export interface WebhookRow {
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  failureCount: number;
+  createdAt: number;
+}
+
+// -- Endpoint surface -----------------------------------------------------
+
 export const api = {
+  // Auth
   signup: (body: {
     email: string;
     password: string;
@@ -89,37 +153,76 @@ export const api = {
   whoami: (token: string) =>
     request<{ userId: string; tenantId: string; scopes: string[] }>("/auth/whoami", { token }),
 
-  listConversations: (token: string) =>
-    request<{
-      conversations: Array<{
-        id: string;
-        title: string | null;
-        encryptedTitle: string | null;
-        wrappedConversationKey: string;
-        createdAt: number;
-        updatedAt: number;
-      }>;
-    }>("/conversations", { token }),
-
-  createConversation: (token: string, body: { title?: string; encryptedTitle?: string; wrappedConversationKey: string }) =>
-    request<{ conversation: { id: string; createdAt: number; updatedAt: number } }>("/conversations", {
-      method: "POST",
-      body,
+  // Conversations / sessions
+  listConversations: (token: string, filter: SessionFilter = "active") =>
+    request<{ conversations: ConversationRow[] }>("/conversations", {
       token,
+      query: { filter },
     }),
 
-  listMessages: (token: string, conversationId: string) =>
+  createConversation: (
+    token: string,
+    body: { title?: string; encryptedTitle?: string; wrappedConversationKey: string; agentId?: string },
+    idempotencyKey?: string,
+  ) =>
     request<{
-      messages: Array<{ id: string; role: string; ciphertext: string; meta: string | null; createdAt: number }>;
-    }>(`/conversations/${conversationId}/messages`, { token }),
+      conversation: {
+        id: string;
+        createdAt: number;
+        updatedAt: number;
+        isPinned: boolean;
+        isArchived: boolean;
+        messageCount: number;
+      };
+    }>("/conversations", { method: "POST", body, token, idempotencyKey }),
+
+  patchConversation: (
+    token: string,
+    conversationId: string,
+    body: { title?: string; encryptedTitle?: string; isPinned?: boolean; isArchived?: boolean; agentId?: string | null },
+  ) => request<{ conversation: ConversationRow }>(`/conversations/${conversationId}`, { method: "PATCH", body, token }),
+
+  deleteConversation: (token: string, conversationId: string) =>
+    request<{ ok: true }>(`/conversations/${conversationId}`, { method: "DELETE", token }),
+
+  // Messages
+  listMessages: (token: string, conversationId: string) =>
+    request<{ messages: MessageRow[] }>(`/conversations/${conversationId}/messages`, { token }),
 
   appendMessage: (
     token: string,
     conversationId: string,
     body: { role: "user" | "assistant" | "system" | "tool"; ciphertext: string; meta?: Record<string, unknown> },
-  ) => request<{ message: { id: string; createdAt: number } }>(`/conversations/${conversationId}/messages`, {
-    method: "POST",
-    body,
-    token,
-  }),
+    idempotencyKey?: string,
+  ) =>
+    request<{ message: { id: string; createdAt: number } }>(`/conversations/${conversationId}/messages`, {
+      method: "POST",
+      body,
+      token,
+      idempotencyKey,
+    }),
+
+  // API keys
+  listApiKeys: (token: string) => request<{ apikeys: ApiKeyRow[] }>("/apikeys", { token }),
+
+  issueApiKey: (token: string, body: { label: string; scopes: string[]; expiresAt?: number }) =>
+    request<{ apikey: ApiKeyRow; token: string }>("/apikeys", { method: "POST", body, token }),
+
+  revokeApiKey: (token: string, id: string) =>
+    request<{ ok: true }>(`/apikeys/${id}`, { method: "DELETE", token }),
+
+  // Webhooks
+  listWebhooks: (token: string) => request<{ webhooks: WebhookRow[] }>("/webhooks", { token }),
+
+  createWebhook: (token: string, body: { url: string; events: string[]; secret?: string }) =>
+    request<{ webhook: WebhookRow; secret: string }>("/webhooks", { method: "POST", body, token }),
+
+  patchWebhook: (token: string, id: string, body: { url?: string; events?: string[]; active?: boolean }) =>
+    request<{ webhook: WebhookRow }>(`/webhooks/${id}`, { method: "PATCH", body, token }),
+
+  deleteWebhook: (token: string, id: string) =>
+    request<{ ok: true }>(`/webhooks/${id}`, { method: "DELETE", token }),
+
+  testWebhook: (token: string, id: string) =>
+    request<{ ok: true; deliveryId: string }>(`/webhooks/${id}/test`, { method: "POST", token }),
 };
