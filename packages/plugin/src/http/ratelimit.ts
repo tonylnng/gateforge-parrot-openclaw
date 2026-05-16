@@ -88,21 +88,43 @@ export function applyRateLimit(
   limiters: { perKey: RateLimiter; perTenant: RateLimiter },
   principal: Principal,
   res: HttpResponse,
+  cfg?: ParrotConfig,
 ): boolean {
+  const capacity = cfg?.api.rateLimit.maxRequests ?? 0;
   const perKey = limiters.perKey.consume(`k:${principal.jti}`);
   if (!perKey.allowed) {
-    res.setHeader("Retry-After", String(Math.ceil(perKey.retryAfterMs / 1000)));
+    const retryAfterSec = Math.ceil(perKey.retryAfterMs / 1000);
+    const resetEpoch = Math.ceil(Date.now() / 1000) + retryAfterSec;
+    res.setHeader("Retry-After", String(retryAfterSec));
     res.setHeader("X-RateLimit-Scope", "key");
+    if (capacity) res.setHeader("X-RateLimit-Limit", String(capacity));
+    res.setHeader("X-RateLimit-Remaining", "0");
+    res.setHeader("X-RateLimit-Reset", String(resetEpoch));
     sendError(res, 429, "rate_limited", "API key rate limit exceeded. Slow down.");
     return false;
   }
   const perTenant = limiters.perTenant.consume(`t:${principal.tenantId}`);
   if (!perTenant.allowed) {
-    res.setHeader("Retry-After", String(Math.ceil(perTenant.retryAfterMs / 1000)));
+    const retryAfterSec = Math.ceil(perTenant.retryAfterMs / 1000);
+    const resetEpoch = Math.ceil(Date.now() / 1000) + retryAfterSec;
+    res.setHeader("Retry-After", String(retryAfterSec));
     res.setHeader("X-RateLimit-Scope", "tenant");
+    if (capacity) res.setHeader("X-RateLimit-Limit", String(capacity * 10));
+    res.setHeader("X-RateLimit-Remaining", "0");
+    res.setHeader("X-RateLimit-Reset", String(resetEpoch));
     sendError(res, 429, "rate_limited", "Tenant rate limit exceeded. Try again shortly.");
     return false;
   }
+  // Standard headers (RFC draft) — reflect the tighter per-key bucket.
+  if (capacity) res.setHeader("X-RateLimit-Limit", String(capacity));
+  res.setHeader("X-RateLimit-Remaining", String(perKey.remaining));
+  // Approximate reset: how long until the per-key bucket is full again at the
+  // configured refill rate. For an unfilled bucket this is the time to refill
+  // one token; for a near-empty bucket it scales linearly. We expose the
+  // window-end seconds since epoch for client back-off calculations.
+  const windowSec = cfg ? Math.max(1, cfg.api.rateLimit.windowMs / 1000) : 60;
+  res.setHeader("X-RateLimit-Reset", String(Math.ceil(Date.now() / 1000) + windowSec));
+  // Legacy detail headers preserved for existing clients.
   res.setHeader("X-RateLimit-Remaining-Key", String(perKey.remaining));
   res.setHeader("X-RateLimit-Remaining-Tenant", String(perTenant.remaining));
   return true;

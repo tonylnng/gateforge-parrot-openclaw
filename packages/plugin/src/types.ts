@@ -46,6 +46,25 @@ export interface ParrotConfig {
     enabled: boolean;
     hashChain: boolean;
   };
+  /**
+   * Optional list of agent descriptors surfaced through `/agents`. These are
+   * pure metadata used by clients to populate model pickers; the plugin does
+   * not enforce or route on them. If omitted, `/agents` returns an empty
+   * list and clients should fall back to their own catalogue.
+   */
+  agents?: AgentDescriptor[];
+}
+
+export interface AgentDescriptor {
+  id: string;
+  name: string;
+  description?: string;
+  model?: string;
+  vendor?: string;
+  maxInputTokens?: number;
+  maxOutputTokens?: number;
+  capabilities?: string[];
+  enabled?: boolean;
 }
 
 /** Subset of the OpenClaw plugin API surface this plugin uses. */

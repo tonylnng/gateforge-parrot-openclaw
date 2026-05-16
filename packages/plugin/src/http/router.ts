@@ -15,18 +15,24 @@ import {
   appendMessage,
   createConversation,
   deleteConversation,
+  exportConversation,
+  getConversation,
   listConversations,
   listMessages,
   patchConversation,
 } from "../routes/conversations.js";
-import { issueApiKey, listApiKeys, revokeApiKey } from "../routes/apikeys.js";
+import { issueApiKey, listApiKeys, patchApiKey, revokeApiKey } from "../routes/apikeys.js";
 import {
   createWebhook,
   deleteWebhook,
+  listDeliveries,
   listWebhooks,
   patchWebhook,
   testWebhook,
 } from "../routes/webhooks.js";
+import { getAgent, listAgents } from "../routes/agents.js";
+import { listAudit, verifyAudit } from "../routes/audit.js";
+import { attachRequestId } from "./requestId.js";
 import { streamMessage, StreamRegistry } from "../routes/sse.js";
 import { applyRateLimit, makeLimiters } from "./ratelimit.js";
 import { findIdempotentResponse, makeCapturingResponse, recordIdempotent } from "./idempotency.js";
@@ -54,6 +60,8 @@ export function registerHttp(args: {
   const limiters = makeLimiters(cfg);
   const streamRegistry = new StreamRegistry();
   const webhookCtx = { cfg, db, logger };
+  const agentCtx = { cfg, db };
+  const auditCtx = { cfg, db };
   const sseCtx = { cfg, db, logger, registry: streamRegistry };
 
   // -- UI (bundled SPA) ---------------------------------------------------
@@ -179,6 +187,22 @@ export function registerHttp(args: {
   });
   api.registerHttpRoute({
     path: `${apiBase}/conversations/:id`,
+    method: "GET",
+    auth: "plugin",
+    handler: gateway(logger, db, cfg, limiters, (req, res) =>
+      getConversation(convCtx, req, res, extractIdSimple(req.url, `${apiBase}/conversations/`)),
+    ),
+  });
+  api.registerHttpRoute({
+    path: `${apiBase}/conversations/:id/export`,
+    method: "GET",
+    auth: "plugin",
+    handler: gateway(logger, db, cfg, limiters, (req, res) =>
+      exportConversation(convCtx, req, res, extractId(req.url, `${apiBase}/conversations/`, "/export")),
+    ),
+  });
+  api.registerHttpRoute({
+    path: `${apiBase}/conversations/:id`,
     method: "PATCH",
     auth: "plugin",
     handler: gateway(logger, db, cfg, limiters, (req, res) =>
@@ -240,6 +264,14 @@ export function registerHttp(args: {
   });
   api.registerHttpRoute({
     path: `${apiBase}/apikeys/:id`,
+    method: "PATCH",
+    auth: "plugin",
+    handler: wrap(logger, (req, res) =>
+      patchApiKey(apiKeyCtx, req, res, extractIdSimple(req.url, `${apiBase}/apikeys/`)),
+    ),
+  });
+  api.registerHttpRoute({
+    path: `${apiBase}/apikeys/:id`,
     method: "DELETE",
     auth: "plugin",
     handler: wrap(logger, (req, res) =>
@@ -284,6 +316,46 @@ export function registerHttp(args: {
       testWebhook(webhookCtx, req, res, extractId(req.url, `${apiBase}/webhooks/`, "/test")),
     ),
   });
+  api.registerHttpRoute({
+    path: `${apiBase}/webhooks/:id/deliveries`,
+    method: "GET",
+    auth: "plugin",
+    handler: wrap(logger, (req, res) =>
+      listDeliveries(webhookCtx, req, res, extractId(req.url, `${apiBase}/webhooks/`, "/deliveries")),
+    ),
+  });
+
+  // -- Agents (config-driven catalogue) -----------------------------------
+  api.registerHttpRoute({
+    path: `${apiBase}/agents`,
+    method: "GET",
+    auth: "plugin",
+    handler: wrap(logger, (req, res) => listAgents(agentCtx, req, res)),
+  });
+  api.registerHttpRoute({
+    path: `${apiBase}/agents/:id`,
+    method: "GET",
+    auth: "plugin",
+    handler: wrap(logger, (req, res) =>
+      getAgent(agentCtx, req, res, extractIdSimple(req.url, `${apiBase}/agents/`)),
+    ),
+  });
+
+  // -- Audit log ----------------------------------------------------------
+  // /audit/verify is registered first so prefix-based dispatchers don't grab
+  // it with the generic /audit handler.
+  api.registerHttpRoute({
+    path: `${apiBase}/audit/verify`,
+    method: "GET",
+    auth: "plugin",
+    handler: wrap(logger, (req, res) => verifyAudit(auditCtx, req, res)),
+  });
+  api.registerHttpRoute({
+    path: `${apiBase}/audit`,
+    method: "GET",
+    auth: "plugin",
+    handler: wrap(logger, (req, res) => listAudit(auditCtx, req, res)),
+  });
 
   logger.info(`HTTP routes registered under ${apiBase}`);
   return { streamRegistry };
@@ -312,14 +384,15 @@ function wrap(
   fn: (req: HttpRequest, res: HttpResponse) => Promise<void> | void,
 ): (req: HttpRequest, res: HttpResponse) => Promise<boolean> {
   return async (req, res) => {
+    const requestId = attachRequestId(req, res);
     try {
       const origin = (req.headers.origin as string | undefined) ?? undefined;
       if (origin) applyCors(res, origin);
       await fn(req, res);
     } catch (err) {
-      logger.error("unhandled route error", { error: (err as Error).message });
+      logger.error("unhandled route error", { error: (err as Error).message, requestId });
       try {
-        sendError(res, 500, "internal_error", "An unexpected error occurred.");
+        sendError(res, 500, "internal_error", "An unexpected error occurred.", undefined, requestId);
       } catch {
         /* response already sent */
       }
@@ -342,6 +415,7 @@ function gateway(
   opts: { idempotent?: boolean } = {},
 ): (req: HttpRequest, res: HttpResponse) => Promise<boolean> {
   return async (req, res) => {
+    const requestId = attachRequestId(req, res);
     try {
       const origin = (req.headers.origin as string | undefined) ?? undefined;
       if (origin) applyCors(res, origin);
@@ -355,7 +429,7 @@ function gateway(
         await fn(req, res);
         return true;
       }
-      if (!applyRateLimit(limiters, principal, res)) return true;
+      if (!applyRateLimit(limiters, principal, res, cfg)) return true;
 
       if (opts.idempotent) {
         const replay = await findIdempotentResponse(db, principal, req);
@@ -379,9 +453,9 @@ function gateway(
 
       await fn(req, res);
     } catch (err) {
-      logger.error("unhandled gateway error", { error: (err as Error).message });
+      logger.error("unhandled gateway error", { error: (err as Error).message, requestId });
       try {
-        sendError(res, 500, "internal_error", "An unexpected error occurred.");
+        sendError(res, 500, "internal_error", "An unexpected error occurred.", undefined, requestId);
       } catch {
         /* */
       }

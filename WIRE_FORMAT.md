@@ -146,6 +146,16 @@ Authorization: Bearer <jwt-or-api-key>
 | `Content-Type`        | On bodies                  | `application/json; charset=utf-8`.                                    |
 | `Idempotency-Key`     | On non-idempotent writes   | Any opaque ≤ 128 chars. Server caches the response for 24 h.          |
 | `X-Tenant`            | Multi-tenant deployments   | Optional, scoped by API key already.                                  |
+| `X-Request-Id`        | Optional, any request      | Echoed back as `X-Parrot-Request-Id`. Server generates one otherwise. |
+
+Every response includes:
+
+| Header                  | Notes                                                                |
+|-------------------------|----------------------------------------------------------------------|
+| `X-Parrot-Request-Id`   | Opaque trace ID. Quote when filing support tickets.                  |
+| `X-RateLimit-Limit`     | Current per-key window cap.                                          |
+| `X-RateLimit-Remaining` | Tokens left in the per-key bucket.                                   |
+| `X-RateLimit-Reset`     | Unix seconds at which the bucket fully refills.                      |
 
 ### 3.3 Conversation create
 
@@ -212,11 +222,12 @@ All errors return:
 ```json
 {
   "error": {
-    "code":     "validation_error" | "unauthorized" | "forbidden"
-              | "rate_limited"    | "not_found"   | "conflict"
-              | "internal_error",
-    "message":  "human-readable",
-    "details":  { "...optional..." }
+    "code":      "validation_error" | "unauthorized" | "forbidden"
+               | "rate_limited"    | "not_found"   | "conflict"
+               | "internal_error",
+    "message":   "human-readable",
+    "details":   { "...optional..." },
+    "requestId": "<same value as X-Parrot-Request-Id>"
   }
 }
 ```

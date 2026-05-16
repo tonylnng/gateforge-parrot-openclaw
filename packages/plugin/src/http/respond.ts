@@ -11,8 +11,18 @@ export function sendJson(res: HttpResponse, status: number, body: unknown): void
   res.end(payload);
 }
 
-export function sendError(res: HttpResponse, status: number, code: string, message: string): void {
-  sendJson(res, status, { error: { code, message } });
+export function sendError(
+  res: HttpResponse,
+  status: number,
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+  requestId?: string,
+): void {
+  const errBody: Record<string, unknown> = { code, message };
+  if (details) errBody.details = details;
+  if (requestId) errBody.requestId = requestId;
+  sendJson(res, status, { error: errBody });
 }
 
 /** Read the full request body (max 1 MiB by default) and parse as JSON. */

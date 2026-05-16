@@ -318,6 +318,158 @@ export async function deleteConversation(
   sendJson(res, 200, { ok: true, deletedAt: now });
 }
 
+/**
+ * GET /conversations/:id — fetch a single conversation row (encrypted title
+ * + wrapped key + state). Owner only.
+ */
+export async function getConversation(
+  ctx: ConvCtx,
+  req: HttpRequest,
+  res: HttpResponse,
+  conversationId: string,
+): Promise<void> {
+  let principal: Principal;
+  try {
+    principal = await principalFromRequest(ctx.cfg, req);
+  } catch (e) {
+    sendError(res, 401, "unauthorized", (e as Error).message);
+    return;
+  }
+
+  const t = ctx.db.schema.conversations;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (await (ctx.db.drizzle as any)
+    .select()
+    .from(t)
+    .where(and(eq(t.id, conversationId), eq(t.ownerId, principal.userId), eq(t.tenantId, principal.tenantId)))
+    .limit(1)) as Array<{
+      id: string;
+      title: string | null;
+      encryptedTitle: string | null;
+      wrappedConversationKey: string;
+      agentId: string | null;
+      isPinned: number;
+      isArchived: number;
+      pinnedAt: number | null;
+      archivedAt: number | null;
+      lastMessageAt: number | null;
+      messageCount: number;
+      createdAt: number;
+      updatedAt: number;
+      deletedAt: number | null;
+    }>;
+
+  const r = rows[0];
+  if (!r || r.deletedAt !== null) {
+    sendError(res, 404, "not_found", "Conversation not found.");
+    return;
+  }
+
+  sendJson(res, 200, {
+    conversation: {
+      id: r.id,
+      title: r.title,
+      encryptedTitle: r.encryptedTitle,
+      wrappedConversationKey: r.wrappedConversationKey,
+      agentId: r.agentId,
+      isPinned: r.isPinned === 1,
+      isArchived: r.isArchived === 1,
+      pinnedAt: r.pinnedAt,
+      archivedAt: r.archivedAt,
+      lastMessageAt: r.lastMessageAt,
+      messageCount: r.messageCount,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    },
+  });
+}
+
+/**
+ * GET /conversations/:id/export — ciphertext-only dump of the conversation
+ * for client-side decryption (e.g. user-initiated download). Includes the
+ * wrapped conversation key, encrypted title, and every message envelope.
+ * Bounded at 5000 messages per call — paginate via lastSeenId for larger
+ * conversations (clients should iterate until empty).
+ */
+export async function exportConversation(
+  ctx: ConvCtx,
+  req: HttpRequest,
+  res: HttpResponse,
+  conversationId: string,
+): Promise<void> {
+  let principal: Principal;
+  try {
+    principal = await principalFromRequest(ctx.cfg, req);
+  } catch (e) {
+    sendError(res, 401, "unauthorized", (e as Error).message);
+    return;
+  }
+
+  const conv = await loadOwnedConversation(ctx.db, conversationId, principal.userId, principal.tenantId);
+  if (!conv) {
+    sendError(res, 404, "not_found", "Conversation not found.");
+    return;
+  }
+
+  const t = ctx.db.schema.conversations;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cvRows = (await (ctx.db.drizzle as any)
+    .select()
+    .from(t)
+    .where(eq(t.id, conversationId))
+    .limit(1)) as Array<{
+      id: string;
+      encryptedTitle: string | null;
+      wrappedConversationKey: string;
+      agentId: string | null;
+      createdAt: number;
+      updatedAt: number;
+    }>;
+  const cv = cvRows[0];
+  if (!cv) {
+    sendError(res, 404, "not_found", "Conversation not found.");
+    return;
+  }
+
+  const m = ctx.db.schema.messages;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const messages = (await (ctx.db.drizzle as any)
+    .select()
+    .from(m)
+    .where(eq(m.conversationId, conversationId))
+    .orderBy(asc(m.createdAt))
+    .limit(5000)) as Array<{
+      id: string;
+      role: string;
+      ciphertext: string;
+      meta: string | null;
+      createdAt: number;
+    }>;
+
+  await appendAudit(ctx.db, ctx.cfg, {
+    tenantId: principal.tenantId,
+    actorId: principal.userId,
+    action: "conversation.export",
+    resource: conversationId,
+    payload: { count: messages.length },
+  });
+
+  sendJson(res, 200, {
+    schemaVersion: 1,
+    exportedAt: Date.now(),
+    conversation: {
+      id: cv.id,
+      encryptedTitle: cv.encryptedTitle,
+      wrappedConversationKey: cv.wrappedConversationKey,
+      agentId: cv.agentId,
+      createdAt: cv.createdAt,
+      updatedAt: cv.updatedAt,
+    },
+    messages,
+    note: "All bodies are ciphertext. Decrypt client-side with the unwrapped conversation key.",
+  });
+}
+
 export async function listMessages(ctx: ConvCtx, req: HttpRequest, res: HttpResponse, conversationId: string): Promise<void> {
   let principal: Principal;
   try {

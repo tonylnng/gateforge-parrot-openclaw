@@ -295,6 +295,75 @@ export async function testWebhook(
   sendJson(res, 202, { ok: true, queued: true });
 }
 
+/**
+ * GET /webhooks/:id/deliveries — recent delivery attempts for a webhook.
+ * Returns at most 100 rows ordered newest-first. Payload column is included
+ * as-is (metadata only; never any ciphertext or plaintext content).
+ */
+export async function listDeliveries(
+  ctx: WebhookCtx,
+  req: HttpRequest,
+  res: HttpResponse,
+  webhookId: string,
+): Promise<void> {
+  let principal;
+  try {
+    principal = await principalFromAny(ctx.cfg, ctx.db, req, principalFromRequest);
+    requireScopeStrict(principal, "webhooks:manage");
+  } catch (e) {
+    const status = e instanceof AuthError ? e.status : 401;
+    sendError(res, status, "unauthorized", (e as Error).message);
+    return;
+  }
+
+  const hook = await loadOwnedWebhook(ctx.db, webhookId, principal.userId, principal.tenantId);
+  if (!hook) {
+    sendError(res, 404, "not_found", "Webhook not found.");
+    return;
+  }
+
+  const d = ctx.db.schema.webhookDeliveries;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (await (ctx.db.drizzle as any)
+    .select()
+    .from(d)
+    .where(eq(d.webhookId, webhookId))
+    .orderBy(desc(d.createdAt))
+    .limit(100)) as Array<{
+      id: string;
+      eventType: string;
+      payload: string;
+      attempt: number;
+      responseCode: number | null;
+      deliveredAt: number | null;
+      nextRetryAt: number | null;
+      lastError: string | null;
+      createdAt: number;
+    }>;
+
+  sendJson(res, 200, {
+    deliveries: rows.map((r) => ({
+      id: r.id,
+      eventType: r.eventType,
+      attempt: r.attempt,
+      responseCode: r.responseCode,
+      deliveredAt: r.deliveredAt,
+      nextRetryAt: r.nextRetryAt,
+      lastError: r.lastError,
+      createdAt: r.createdAt,
+      payload: safeJsonParse(r.payload),
+    })),
+  });
+}
+
+function safeJsonParse(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
 async function loadOwnedWebhook(db: DbHandle, id: string, userId: string, tenantId: string): Promise<{ id: string } | null> {
   const t = db.schema.webhooks;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

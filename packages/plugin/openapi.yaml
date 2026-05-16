@@ -30,6 +30,8 @@ tags:
   - name: Messages
   - name: API Keys
   - name: Webhooks
+  - name: Agents
+  - name: Audit
   - name: System
 
 paths:
@@ -184,6 +186,21 @@ paths:
   /conversations/{id}:
     parameters:
       - $ref: "#/components/parameters/ConversationId"
+    get:
+      tags: [Sessions]
+      summary: Get a single session (with wrappedConversationKey)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation:
+                    $ref: "#/components/schemas/Session"
+        "404":
+          $ref: "#/components/responses/NotFound"
     patch:
       tags: [Sessions]
       summary: Rename / pin / archive
@@ -204,6 +221,26 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Ok"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /conversations/{id}/export:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    get:
+      tags: [Sessions]
+      summary: Export the session bundle (ciphertext + metadata)
+      description: |
+        Returns the session row plus up to 5000 messages as ciphertext.
+        The plugin cannot decrypt; clients must hold the wrappedConversationKey
+        and the user's master key to read it back.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionExport"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -319,6 +356,26 @@ paths:
         name: id
         required: true
         schema: { type: string }
+    patch:
+      tags: [API Keys]
+      summary: Rename or update scopes of an API key (token unchanged)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchApiKeyRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Key is revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       tags: [API Keys]
       summary: Revoke an API key
@@ -408,6 +465,113 @@ paths:
                 properties:
                   ok: { type: boolean }
                   queued: { type: boolean }
+
+  /webhooks/{id}/deliveries:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Webhooks]
+      summary: List the 100 most recent delivery attempts for this webhook
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WebhookDelivery"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /agents:
+    get:
+      tags: [Agents]
+      summary: List available agents (config-driven catalogue)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Agent"
+
+  /agents/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Agents]
+      summary: Fetch one agent descriptor
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent:
+                    $ref: "#/components/schemas/Agent"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /audit:
+    get:
+      tags: [Audit]
+      summary: List audit log entries (cursor-paginated, newest first)
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string }
+          description: Opaque cursor returned by the previous page.
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: actorId
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditEntry"
+                  nextCursor: { type: string, nullable: true }
+
+  /audit/verify:
+    get:
+      tags: [Audit]
+      summary: Recompute the audit hash chain and report tamper status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditVerifyResult"
 
 components:
   securitySchemes:
@@ -673,3 +837,87 @@ components:
           type: array
           items: { type: string }
         enabled: { type: boolean }
+
+    PatchApiKeyRequest:
+      type: object
+      properties:
+        label: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+
+    SessionExport:
+      type: object
+      required: [schemaVersion, exportedAt, conversation, messages]
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        exportedAt: { type: integer }
+        conversation:
+          $ref: "#/components/schemas/Session"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        note: { type: string }
+
+    WebhookDelivery:
+      type: object
+      properties:
+        id: { type: string }
+        eventType: { type: string }
+        attempt: { type: integer }
+        responseCode: { type: integer, nullable: true }
+        deliveredAt: { type: integer, nullable: true }
+        nextRetryAt: { type: integer, nullable: true }
+        lastError: { type: string, nullable: true }
+        createdAt: { type: integer }
+        payload:
+          type: object
+          description: Non-sensitive event metadata only (no ciphertext).
+          additionalProperties: true
+
+    Agent:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        model: { type: string }
+        vendor: { type: string }
+        maxInputTokens: { type: integer }
+        maxOutputTokens: { type: integer }
+        capabilities:
+          type: array
+          items: { type: string }
+
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: string }
+        actorId: { type: string, nullable: true }
+        action: { type: string }
+        resource: { type: string, nullable: true }
+        payload:
+          description: Non-sensitive JSON metadata (object, array, or null).
+          nullable: true
+        hash: { type: string }
+        prevHash: { type: string, nullable: true }
+        createdAt: { type: integer }
+
+    AuditVerifyResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+        checked: { type: integer }
+        hashChainEnabled: { type: boolean }
+        breakAt:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string }
+            createdAt: { type: integer }
+            action: { type: string }
+        expected: { type: string }
+        actual: { type: string }
+        note: { type: string }

@@ -32,6 +32,13 @@ const issueSchema = z.object({
   env: z.enum(["live", "test"]).optional(),
 });
 
+const patchSchema = z
+  .object({
+    label: z.string().min(1).max(120).optional(),
+    scopes: z.array(z.enum(SCOPES as unknown as [string, ...string[]])).min(1).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "no fields to update" });
+
 export async function listApiKeys(ctx: ApiKeyCtx, req: HttpRequest, res: HttpResponse): Promise<void> {
   let principal;
   try {
@@ -139,6 +146,72 @@ export async function issueApiKey(ctx: ApiKeyCtx, req: HttpRequest, res: HttpRes
       token: generated.token,
     },
   });
+}
+
+/**
+ * PATCH /apikeys/:id — rename a key or update its scope set. The key value
+ * itself is never re-issued; only metadata changes.
+ */
+export async function patchApiKey(
+  ctx: ApiKeyCtx,
+  req: HttpRequest,
+  res: HttpResponse,
+  apiKeyId: string,
+): Promise<void> {
+  let principal;
+  try {
+    principal = await principalFromRequest(ctx.cfg, req);
+    requireScopeStrict(principal, "apikeys:manage");
+  } catch (e) {
+    const status = e instanceof AuthError ? e.status : 401;
+    sendError(res, status, "unauthorized", (e as Error).message);
+    return;
+  }
+
+  const body = await readJsonBody(req).catch((e: Error) => {
+    sendError(res, 400, "bad_json", e.message);
+    return null;
+  });
+  if (body === null) return;
+  const parsed = patchSchema.safeParse(body);
+  if (!parsed.success) {
+    sendError(res, 400, "validation_error", parsed.error.message);
+    return;
+  }
+
+  const t = ctx.db.schema.apiKeys;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (await (ctx.db.drizzle as any)
+    .select({ id: t.id, revokedAt: t.revokedAt })
+    .from(t)
+    .where(and(eq(t.id, apiKeyId), eq(t.userId, principal.userId), eq(t.tenantId, principal.tenantId)))
+    .limit(1)) as Array<{ id: string; revokedAt: number | null }>;
+  if (rows.length === 0) {
+    sendError(res, 404, "not_found", "API key not found.");
+    return;
+  }
+  if (rows[0].revokedAt !== null) {
+    sendError(res, 409, "conflict", "API key is revoked; reissue instead.");
+    return;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updates: Record<string, any> = {};
+  if (parsed.data.label !== undefined) updates.label = parsed.data.label;
+  if (parsed.data.scopes !== undefined) updates.scopes = JSON.stringify(parsed.data.scopes);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (ctx.db.drizzle as any).update(t).set(updates).where(eq(t.id, apiKeyId));
+
+  await appendAudit(ctx.db, ctx.cfg, {
+    tenantId: principal.tenantId,
+    actorId: principal.userId,
+    action: "apikey.patch",
+    resource: apiKeyId,
+    payload: { fields: Object.keys(parsed.data) },
+  });
+
+  sendJson(res, 200, { ok: true });
 }
 
 export async function revokeApiKey(

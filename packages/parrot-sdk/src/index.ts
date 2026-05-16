@@ -133,6 +133,68 @@ export interface CreatedWebhook extends WebhookInfo {
   secret: string;
 }
 
+export interface WebhookDelivery {
+  id: string;
+  eventType: string;
+  attempt: number;
+  responseCode: number | null;
+  deliveredAt: number | null;
+  nextRetryAt: number | null;
+  lastError: string | null;
+  createdAt: number;
+  payload: Record<string, unknown> | null;
+}
+
+export interface SessionExport {
+  schemaVersion: 1;
+  exportedAt: number;
+  conversation: SessionSummary;
+  messages: MessageSummary[];
+  note?: string;
+}
+
+export interface AgentDescriptor {
+  id: string;
+  name: string;
+  description?: string;
+  model?: string;
+  vendor?: string;
+  maxInputTokens?: number;
+  maxOutputTokens?: number;
+  capabilities?: string[];
+}
+
+export interface AuditEntry {
+  id: string;
+  actorId: string | null;
+  action: string;
+  resource: string | null;
+  payload: unknown;
+  hash: string;
+  prevHash: string | null;
+  createdAt: number;
+}
+
+export interface AuditPage {
+  items: AuditEntry[];
+  nextCursor: string | null;
+}
+
+export interface AuditVerifyResult {
+  ok: boolean;
+  checked: number;
+  hashChainEnabled?: boolean;
+  breakAt?: { id: string; createdAt: number; action: string };
+  expected?: string;
+  actual?: string;
+  note?: string;
+}
+
+export interface PatchApiKeyInput {
+  label?: string;
+  scopes?: string[];
+}
+
 // ---- errors -----------------------------------------------------------------
 
 export class ParrotError extends Error {
@@ -197,6 +259,15 @@ export class ParrotClient {
 
   async renameSession(id: string, encryptedTitle: string): Promise<void> {
     return this.patchSession(id, { encryptedTitle });
+  }
+
+  async getSession(id: string): Promise<SessionSummary> {
+    const r = await this.request("GET", `/conversations/${encodeURIComponent(id)}`);
+    return (r as { conversation: SessionSummary }).conversation;
+  }
+
+  async exportSession(id: string): Promise<SessionExport> {
+    return (await this.request("GET", `/conversations/${encodeURIComponent(id)}/export`)) as SessionExport;
   }
 
   // ---- messages ----
@@ -283,6 +354,10 @@ export class ParrotClient {
     return (r as { apiKey: IssuedApiKey }).apiKey;
   }
 
+  async patchApiKey(id: string, patch: PatchApiKeyInput): Promise<void> {
+    await this.request("PATCH", `/apikeys/${encodeURIComponent(id)}`, patch);
+  }
+
   async revokeApiKey(id: string): Promise<void> {
     await this.request("DELETE", `/apikeys/${encodeURIComponent(id)}`);
   }
@@ -309,6 +384,39 @@ export class ParrotClient {
 
   async testWebhook(id: string): Promise<void> {
     await this.request("POST", `/webhooks/${encodeURIComponent(id)}/test`);
+  }
+
+  async listDeliveries(id: string): Promise<WebhookDelivery[]> {
+    const r = await this.request("GET", `/webhooks/${encodeURIComponent(id)}/deliveries`);
+    return (r as { deliveries: WebhookDelivery[] }).deliveries ?? [];
+  }
+
+  // ---- agents ----
+
+  async listAgents(): Promise<AgentDescriptor[]> {
+    const r = await this.request("GET", "/agents");
+    return (r as { agents: AgentDescriptor[] }).agents ?? [];
+  }
+
+  async getAgent(id: string): Promise<AgentDescriptor> {
+    const r = await this.request("GET", `/agents/${encodeURIComponent(id)}`);
+    return (r as { agent: AgentDescriptor }).agent;
+  }
+
+  // ---- audit ----
+
+  async listAudit(opts: { cursor?: string; limit?: number; action?: string; actorId?: string } = {}): Promise<AuditPage> {
+    const qs = new URLSearchParams();
+    if (opts.cursor) qs.set("cursor", opts.cursor);
+    if (opts.limit !== undefined) qs.set("limit", String(opts.limit));
+    if (opts.action) qs.set("action", opts.action);
+    if (opts.actorId) qs.set("actorId", opts.actorId);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return (await this.request("GET", `/audit${suffix}`)) as AuditPage;
+  }
+
+  async verifyAudit(): Promise<AuditVerifyResult> {
+    return (await this.request("GET", "/audit/verify")) as AuditVerifyResult;
   }
 
   // ---- internals ----
